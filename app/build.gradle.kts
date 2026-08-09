@@ -22,6 +22,9 @@ android {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // No release keystore yet — debug-sign so CD can produce an installable APK.
+            // Swap this for a real signingConfig before shipping to the Play Store.
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
