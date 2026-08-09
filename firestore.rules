@@ -3,8 +3,8 @@ rules_version = '2';
 // Deploy this in the Firebase console under Firestore Database > Rules,
 // or with the Firebase CLI: firebase deploy --only firestore:rules
 //
-// Model: every signed-in device (anonymous auth, no password) can create a new
-// household. After that, only devices whose uid is listed in that household's
+// Model: every signed-in device (Google sign-in or anonymous, no password) can create a
+// new household. After that, only devices whose uid is listed in that household's
 // `members` array can read or write its data — including the seizure log
 // subcollection. Joining a household (adding your own uid to `members`) is the
 // one exception: it's allowed for any signed-in user, since that's exactly how

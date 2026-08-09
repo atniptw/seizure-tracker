@@ -16,9 +16,11 @@ steps below.
 2. Click **Add project**, name it something like "Seizure Tracker", and finish the wizard
    (you can disable Google Analytics — not needed here).
 3. In the left sidebar, click **Build → Authentication → Get started**. Under the "Sign-in
-   method" tab, enable **Anonymous**. This is the only auth method the app uses — nobody has
-   to create an account or password; each phone is just recognized as "a device that knows
-   the household code."
+   method" tab, enable both **Google** and **Anonymous**. Google sign-in is the default —
+   each person's identity is tied to their Google account, so it survives the phone being
+   wiped or reset. Anonymous is there as a fallback for anyone who'd rather not attach a
+   Google account (e.g. a petsitter); that identity is lost if the app is reinstalled or its
+   data cleared.
 4. In the left sidebar, click **Build → Firestore Database → Create database**. Choose
    **Start in production mode**, and pick a region close to you.
 5. Still in Firestore, go to the **Rules** tab and replace the contents with everything in
@@ -30,7 +32,10 @@ steps below.
    - Android package name: `com.atnip.seizuretracker` (must match exactly — this comes from
      `app/build.gradle.kts` in this project)
    - Nickname: anything, e.g. "Seizure Tracker Android"
-   - You can skip the SHA-1 field — it's not needed since this app doesn't use Google Sign-In.
+   - Add a SHA-1 fingerprint (required for Google Sign-In) — for the debug build, get it by
+     running `keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey
+     -storepass android -keypass android` and pasting the `SHA1:` value. You'll need to add
+     another fingerprint later for release builds signed with a different key.
 7. Download the `google-services.json` file it offers you, and place it at:
    ```
    SeizureTracker/app/google-services.json
