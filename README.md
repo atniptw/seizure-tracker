@@ -111,13 +111,20 @@ Two GitHub Actions workflows live in `.github/workflows/`:
   release build is currently debug-signed (no release keystore yet) — fine for sideloading
   to testers, not for the Play Store.
 
-Both workflows need `app/google-services.json` (gitignored, so it isn't in the repo) supplied
-as a secret. The release workflow additionally needs Firebase App Distribution credentials.
-Set these once as repo secrets — **Settings → Secrets and variables → Actions**, or via `gh`:
+Both workflows need `app/google-services.json` and `app/debug.keystore` (both gitignored, so
+neither is in the repo) supplied as secrets. The debug keystore secret matters because
+GitHub-hosted runners are ephemeral: without a pinned keystore, AGP would generate a fresh
+`~/.android/debug.keystore` (and thus a new signing cert) on every run, breaking installs over
+prior Firebase App Distribution builds and invalidating Google Sign-In's SHA-1 registration. The
+release workflow additionally needs Firebase App Distribution credentials. Set these once as
+repo secrets — **Settings → Secrets and variables → Actions**, or via `gh`:
 
 ```bash
 # contents of your app/google-services.json, used by both workflows
 gh secret set GOOGLE_SERVICES_JSON < app/google-services.json
+
+# your local debug keystore, base64-encoded, used by both workflows
+gh secret set DEBUG_KEYSTORE_BASE64 --body "$(base64 -i ~/.android/debug.keystore)"
 
 # Firebase console → Project settings → Your apps → App ID (format: 1:...:android:...)
 gh secret set FIREBASE_APP_ID
