@@ -17,3 +17,7 @@ local.properties
 *.aab
 app/google-services.json
 app/debug.keystore
+node_modules/
+firestore-debug.log
+firebase-debug.log
+ui-debug.log
