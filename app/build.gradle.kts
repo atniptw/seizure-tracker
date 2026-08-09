@@ -101,4 +101,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
+
+    // Unit tests
+    testImplementation("junit:junit:4.13.2")
 }

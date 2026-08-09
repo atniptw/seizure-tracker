@@ -13,8 +13,8 @@ object CsvExporter {
         return if (needsQuoting) "\"$escaped\"" else escaped
     }
 
-    /** Builds a CSV file of the given seizures in the app's cache dir and returns a shareable Uri. */
-    fun export(context: Context, dogName: String, seizures: List<Seizure>): android.net.Uri {
+    /** Builds the CSV text for the given seizures. Pure/no I/O so it's unit-testable directly. */
+    internal fun buildCsv(seizures: List<Seizure>): String {
         val header = listOf(
             "Date/Time", "Duration", "Type", "Symptoms", "Signs before onset",
             "Possible triggers", "Recovery (min)", "Recovery behavior",
@@ -38,7 +38,12 @@ object CsvExporter {
             ).joinToString(",") { escape(it) }
         }
 
-        val csv = (listOf(header) + rows).joinToString("\n")
+        return (listOf(header) + rows).joinToString("\n")
+    }
+
+    /** Builds a CSV file of the given seizures in the app's cache dir and returns a shareable Uri. */
+    fun export(context: Context, dogName: String, seizures: List<Seizure>): android.net.Uri {
+        val csv = buildCsv(seizures)
 
         val exportsDir = File(context.cacheDir, "exports").apply { mkdirs() }
         val safeName = dogName.ifBlank { "dog" }.replace(Regex("[^A-Za-z0-9_-]"), "_")
