@@ -31,6 +31,7 @@ import androidx.navigation.NavController
 import com.atnip.seizuretracker.ui.navigation.Destinations
 import com.atnip.seizuretracker.util.DateTimeUtils
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun SeizureHistoryScreen(navController: NavController, seizureListViewModel: SeizureListViewModel) {
     val seizures by seizureListViewModel.seizures.collectAsState()

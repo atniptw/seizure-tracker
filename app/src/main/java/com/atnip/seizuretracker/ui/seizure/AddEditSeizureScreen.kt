@@ -49,7 +49,10 @@ import com.atnip.seizuretracker.data.model.SeizureTypes
 import com.atnip.seizuretracker.util.DateTimeUtils
 import java.util.Calendar
 
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@OptIn(
+    androidx.compose.material3.ExperimentalMaterial3Api::class,
+    androidx.compose.foundation.layout.ExperimentalLayoutApi::class
+)
 @Composable
 fun AddEditSeizureScreen(
     navController: NavController,
@@ -162,7 +165,7 @@ fun AddEditSeizureScreen(
                         .fillMaxWidth()
                         .menuAnchor(MenuAnchorType.PrimaryNotEditable)
                 )
-                androidx.compose.material3.ExposedDropdownMenu(expanded = typeMenuExpanded, onDismissRequest = { typeMenuExpanded = false }) {
+                ExposedDropdownMenu(expanded = typeMenuExpanded, onDismissRequest = { typeMenuExpanded = false }) {
                     SeizureTypes.ALL.forEach { type ->
                         androidx.compose.material3.DropdownMenuItem(
                             text = { Text(type) },

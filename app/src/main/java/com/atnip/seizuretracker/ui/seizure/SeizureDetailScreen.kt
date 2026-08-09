@@ -35,6 +35,7 @@ import androidx.navigation.NavController
 import com.atnip.seizuretracker.ui.navigation.Destinations
 import com.atnip.seizuretracker.util.DateTimeUtils
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun SeizureDetailScreen(
     navController: NavController,

@@ -41,6 +41,7 @@ import androidx.navigation.NavController
 import com.atnip.seizuretracker.data.model.Medication
 import com.atnip.seizuretracker.ui.household.HouseholdViewModel
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun DogProfileScreen(navController: NavController, householdViewModel: HouseholdViewModel) {
     val household by householdViewModel.household.collectAsState()
