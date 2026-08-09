@@ -25,10 +25,11 @@ class ViewModelKeyCollisionTest {
     private class FakeHouseholdViewModel : ViewModel()
     private class FakeSeizureListViewModel : ViewModel()
 
-    private fun factoryFor(modelClass: Class<out ViewModel>): ViewModelProvider.Factory =
+    private fun factoryFor(implClass: Class<out ViewModel>): ViewModelProvider.Factory =
         object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
-            override fun <T : ViewModel> create(cls: Class<T>): T = modelClass.getDeclaredConstructor().newInstance() as T
+            override fun <T : ViewModel> create(modelClass: Class<T>): T =
+                implClass.getDeclaredConstructor().newInstance() as T
         }
 
     @Test

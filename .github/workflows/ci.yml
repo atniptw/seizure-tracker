@@ -31,6 +31,14 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
       - name: Write google-services.json
         env:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
@@ -40,6 +48,25 @@ jobs:
         env:
           DEBUG_KEYSTORE_BASE64: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
         run: printf '%s' "$DEBUG_KEYSTORE_BASE64" | base64 --decode > app/debug.keystore
+
+      - name: Install Firestore rules test dependencies
+        run: npm ci
+        working-directory: firestore-tests
+
+      # Tests firestore.rules itself against the emulator (see firestore-tests/rules.test.js) —
+      # separate from the Kotlin app entirely, no google-services.json/secrets involved.
+      - name: Firestore security rules tests
+        run: firebase emulators:exec --project demo-seizuretracker-rules-test --only firestore "npm test"
+        working-directory: firestore-tests
+
+      # Repository/ViewModel tests under app/src/test point at this same emulator (via a
+      # hand-built FirebaseOptions, not the real google-services.json — see
+      # app/src/test/java/com/atnip/seizuretracker/testutil/FirebaseEmulatorRule.kt) so they
+      # need it running too. Plain JVM tests (util/, ViewModelStore regression) run alongside
+      # them harmlessly. `./gradlew build` below reuses these results (Gradle marks the test
+      # tasks UP-TO-DATE) rather than re-running them unwrapped.
+      - name: Unit + integration tests (Firebase emulator)
+        run: firebase emulators:exec --project demo-seizuretracker-rules-test --only firestore,auth "./gradlew test --stacktrace"
 
       - name: Build
         run: ./gradlew build --stacktrace
