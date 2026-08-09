@@ -1,0 +1,103 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## What this is
+
+A single-module Android app (Kotlin + Jetpack Compose) for logging a dog's seizures and
+sharing a PDF/CSV report with a vet. Multiple people share one household's data via Firebase
+(Auth + Firestore), with offline support via Firestore's local cache. See `README.md` for the
+full user-facing setup flow (creating a Firebase project, enabling Google + Anonymous auth,
+publishing `firestore.rules`, adding `google-services.json`).
+
+## Build & run
+
+This project has no CLI test suite or lint config beyond Android Gradle Plugin defaults — verify
+changes by building.
+
+```bash
+./gradlew assembleDebug          # compile the debug APK
+./gradlew installDebug           # build + install on a connected device/emulator
+./gradlew build                  # full build (compile + lint + assemble)
+```
+
+The build **requires `app/google-services.json`** (gitignored, not present in a fresh clone) —
+without it, Gradle sync/build fails. See README.md section 1 to generate one against a real or
+throwaway Firebase project. There is currently no test source set (`app/src/test`,
+`app/src/androidTest`) in the repo.
+
+## Architecture
+
+Single Gradle module (`:app`), package `com.atnip.seizuretracker`, min/target/compile SDK
+26/34/37. No dependency injection framework — repositories are Kotlin `object` singletons called
+directly from ViewModels.
+
+```
+data/model/       Firestore-mapped data classes (Household, Seizure, Medication)
+data/repository/  Firestore/Auth access — AuthRepository, HouseholdRepository, SeizureRepository
+data/local/       UserPrefs (DataStore) — per-device household id + display name, NOT synced
+ui/session/       SessionViewModel — resolves auth + local prefs into a SessionState
+ui/<feature>/     One package per screen (dashboard, household, seizure, export, welcome),
+                   each typically a Screen composable + a ViewModel with its own factory
+util/             HouseholdCode, DateTimeUtils, PdfExporter, CsvExporter
+```
+
+### Session/auth flow
+
+`SessionViewModel` (`ui/session/SessionViewModel.kt`) is the app's entry-point state machine,
+built in `MainActivity` and consumed by `AppRoot` (`ui/AppRoot.kt`):
+
+- `SessionState.Loading` → checking Firebase auth + local prefs
+- `SessionState.NeedsSetup` → not signed in, or signed in but no household/display name saved
+  locally yet → shows `WelcomeScreen` (sign in, then create or join a household)
+- `SessionState.Ready(householdId, uid, displayName)` → main app (`MainNavHost` in `AppRoot.kt`)
+
+Two sign-in paths in `AuthRepository`, both landing on a Firestore-rules-checked uid: Google
+(via Credential Manager, `R.string.default_web_client_id` from `google-services.json`) and
+Anonymous. Anonymous uids don't survive a reinstall; Google uids do.
+
+### Household data model & security rules
+
+A "household" is the shared unit for one dog (`data/model/Household.kt`). `firestore.rules`
+enforces: only uids listed in a household's `members` array can read/write that household or its
+`seizures` subcollection; anyone signed in can create a household or add *themselves* (and only
+themselves) to `members` (the join flow). A separate top-level `codeIndex/{code}` collection maps
+a 6-char human-typed join code (`util/HouseholdCode.kt`) to a household id — it's readable by any
+signed-in device by exact document id (never by list/query) so a device can resolve a code before
+it has joined and thus before it can read the household doc itself. If you change the household
+or seizure document shape, or the join flow, check whether `firestore.rules` needs a matching
+change — Firestore rejects writes that don't satisfy the deployed rules regardless of what the
+app code does.
+
+### ViewModel scoping gotcha
+
+`HouseholdViewModel` and `SeizureListViewModel` are created in `AppRoot` with an explicit
+`viewModel(key = ..., factory = ...)`. The key **must be unique per ViewModel type**, not just
+per household — e.g. `"household_$householdId"` vs `"seizureList_$householdId"`. Two
+`viewModel()` calls sharing a key collide in the same `ViewModelStore`: the second call's `put()`
+silently clears whatever the first stored under that key. (This caused a real bug — household
+data never loading — see git history.) Follow the same per-type-prefixed key pattern for any new
+ViewModel added at this level.
+
+### Data flow pattern
+
+Repositories expose Firestore state as `Flow` (via `callbackFlow` + `addSnapshotListener`) for
+live data, or `suspend fun` for one-shot reads/writes. ViewModels turn the live flows into
+`StateFlow` with `.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), initial)` and
+expose plain functions (`addSeizure`, `updateDogProfile`, etc.) that launch a coroutine in
+`viewModelScope` and call the repository. Screens are stateless composables that take a
+ViewModel and a `NavController`; navigation routes/args live in `ui/navigation/Destinations.kt`.
+
+### Export
+
+`util/PdfExporter.kt` renders a paginated PDF by hand with Android's built-in `PdfDocument` (no
+third-party PDF library, deliberately — see comment in that file). `util/CsvExporter.kt` handles
+the CSV path. Both write to `context.cacheDir` and return a `content://` URI via the
+`FileProvider` declared in `AndroidManifest.xml` (`res/xml/file_paths.xml`), for handing off to
+the share sheet.
+
+## Notes on dependency versions
+
+`app/build.gradle.kts` declares dependency versions directly (no version catalog usage) —
+`gradle/libs.versions.toml` exists but is a leftover from the original project scaffold and is
+largely unused; don't assume it reflects actual dependency versions in use.
