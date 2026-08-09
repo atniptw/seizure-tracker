@@ -99,3 +99,40 @@ send it to them directly to sideload.
 
 Firebase's free "Spark" tier comfortably covers this use case (a handful of users, a few
 hundred seizure entries) — you shouldn't hit any billing at all for personal use.
+
+## CI/CD
+
+Two GitHub Actions workflows live in `.github/workflows/`:
+
+- **`ci.yml`** — runs `./gradlew build` (compile + lint + assemble) on every push to `main`
+  and every PR.
+- **`release.yml`** — on a pushed tag matching `v*.*.*` (or manually via "Run workflow"),
+  builds a release APK and pushes it to Firebase App Distribution's `testers` group. The
+  release build is currently debug-signed (no release keystore yet) — fine for sideloading
+  to testers, not for the Play Store.
+
+Both workflows need `app/google-services.json` and `app/debug.keystore` (both gitignored, so
+neither is in the repo) supplied as secrets. The debug keystore secret matters because
+GitHub-hosted runners are ephemeral: without a pinned keystore, AGP would generate a fresh
+`~/.android/debug.keystore` (and thus a new signing cert) on every run, breaking installs over
+prior Firebase App Distribution builds and invalidating Google Sign-In's SHA-1 registration. The
+release workflow additionally needs Firebase App Distribution credentials. Set these once as
+repo secrets — **Settings → Secrets and variables → Actions**, or via `gh`:
+
+```bash
+# contents of your app/google-services.json, used by both workflows
+gh secret set GOOGLE_SERVICES_JSON < app/google-services.json
+
+# your local debug keystore, base64-encoded, used by both workflows
+gh secret set DEBUG_KEYSTORE_BASE64 --body "$(base64 -i ~/.android/debug.keystore)"
+
+# Firebase console → Project settings → Your apps → App ID (format: 1:...:android:...)
+gh secret set FIREBASE_APP_ID
+
+# a service account key (JSON) with the "Firebase App Distribution Admin" role —
+# create one under Firebase console → Project settings → Service accounts
+gh secret set FIREBASE_SERVICE_ACCOUNT_JSON < path/to/service-account-key.json
+```
+
+The `testers` group referenced in `release.yml` must exist in Firebase App Distribution
+(console → App Distribution → Testers & Groups) before the first release run.

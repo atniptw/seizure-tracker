@@ -18,10 +18,32 @@ android {
         versionName = "1.0"
     }
 
+    signingConfigs {
+        getByName("debug") {
+            // If app/debug.keystore is present, pin signing to it instead of AGP's
+            // implicit ~/.android/debug.keystore. CI writes this file from a secret
+            // (gitignored, never committed — see README's CI/CD section) so every CI
+            // run reuses the same cert; otherwise a fresh one per ephemeral runner
+            // would break installs over prior Firebase App Distribution builds and
+            // Google Sign-In's SHA-1 registration. Local dev falls back to the
+            // default debug keystore when this file isn't present.
+            val pinnedDebugKeystore = file("debug.keystore")
+            if (pinnedDebugKeystore.exists()) {
+                storeFile = pinnedDebugKeystore
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // No release keystore yet — debug-sign so CD can produce an installable APK.
+            // Swap this for a real signingConfig before shipping to the Play Store.
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
