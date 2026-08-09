@@ -35,12 +35,15 @@ fun AppRoot(session: SessionViewModel) {
         is SessionState.Loading -> LoadingScreen()
         is SessionState.NeedsSetup -> WelcomeScreen(session)
         is SessionState.Ready -> {
+            // Keys must be unique per ViewModel *type*, not just per household — two
+            // viewModel() calls sharing a key collide in the same ViewModelStore, and the
+            // second call's put() clears whatever the first one stored under that key.
             val householdViewModel: HouseholdViewModel = viewModel(
-                key = s.householdId,
+                key = "household_${s.householdId}",
                 factory = HouseholdViewModel.factory(s.householdId)
             )
             val seizureListViewModel: SeizureListViewModel = viewModel(
-                key = s.householdId,
+                key = "seizureList_${s.householdId}",
                 factory = SeizureListViewModel.factory(s.householdId)
             )
             MainNavHost(
