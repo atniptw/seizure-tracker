@@ -104,8 +104,11 @@ hundred seizure entries) — you shouldn't hit any billing at all for personal u
 
 Two GitHub Actions workflows live in `.github/workflows/`:
 
-- **`ci.yml`** — runs `./gradlew build` (compile + lint + assemble) on every push to `main`
-  and every PR.
+- **`ci.yml`** — on every push to `main` and every PR: runs the Firestore security rules suite
+  (`firestore-tests/`, Node + Jest) and the Kotlin test suite (`app/src/test` — pure unit tests,
+  plus repository/ViewModel/Compose UI tests against the Firebase Local Emulator Suite) via
+  `firebase emulators:exec`, then `./gradlew build` (compile + lint + assemble). See CLAUDE.md's
+  "Tests" section for how these suites are organized and how to run them locally.
 - **`release.yml`** — on a pushed tag matching `v*.*.*` (or manually via "Run workflow"),
   builds a release APK and pushes it to Firebase App Distribution's `testers` group. The
   release build is currently debug-signed (no release keystore yet) — fine for sideloading
