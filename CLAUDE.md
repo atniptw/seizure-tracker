@@ -12,19 +12,57 @@ publishing `firestore.rules`, adding `google-services.json`).
 
 ## Build & run
 
-This project has no CLI test suite or lint config beyond Android Gradle Plugin defaults — verify
-changes by building.
+No lint config beyond Android Gradle Plugin defaults.
 
 ```bash
 ./gradlew assembleDebug          # compile the debug APK
 ./gradlew installDebug           # build + install on a connected device/emulator
-./gradlew build                  # full build (compile + lint + assemble)
+./gradlew build                  # full build (compile + lint + assemble + test)
 ```
 
 The build **requires `app/google-services.json`** (gitignored, not present in a fresh clone) —
 without it, Gradle sync/build fails. See README.md section 1 to generate one against a real or
-throwaway Firebase project. There is currently no test source set (`app/src/test`,
-`app/src/androidTest`) in the repo.
+throwaway Firebase project.
+
+If `java`/`./gradlew` can't find a JDK (some sandboxed shells have no `java` on `PATH` even with
+Android Studio installed), point `JAVA_HOME` at Android Studio's bundled JBR:
+`export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"` (macOS path;
+adjust for other platforms) and prepend `$JAVA_HOME/bin` to `PATH`.
+
+## Tests
+
+All under `app/src/test` (JVM/Robolectric, no device or AVD needed) except the Firestore rules
+suite, which is Node-based since rules can't be exercised from the JVM:
+
+- **Pure unit tests** (`util/`, `ui/ViewModelKeyCollisionTest.kt`) — no Android/Firebase
+  dependency, run in milliseconds.
+- **Repository/ViewModel integration tests** (`data/repository/`, `ui/session/`,
+  `ui/household/`, `ui/seizure/`) — exercise the real repositories/ViewModels (they're `object`
+  singletons with no DI seam, so mocking isn't a good fit) against the Firebase Local Emulator
+  Suite via Robolectric. See `testutil/FirebaseEmulatorRule.kt`.
+- **Compose UI tests** (`ui/seizure/AddEditSeizureScreenTest.kt`, `ui/welcome/WelcomeScreenTest.kt`,
+  `ui/seizure/SeizureHistoryScreenTest.kt`, `ui/dashboard/DashboardScreenTest.kt`) — same
+  emulator-backed ViewModels, driven through the real screens with Robolectric's
+  `@GraphicsMode(NATIVE)` Compose support.
+- **`firestore-tests/`** (Node + Jest + `@firebase/rules-unit-testing`) — tests `firestore.rules`
+  itself against the emulator: household membership, the join-by-code boundary cases, `codeIndex`
+  get/list/create/update/delete permissions.
+
+The emulator-backed suites need the Firebase Local Emulator Suite running (`firebase.json` at the
+repo root configures it: Firestore on 8080, Auth on 9099) — wrap test runs in
+`firebase emulators:exec`, which starts the emulator, runs the command, and tears it down:
+
+```bash
+./gradlew test                                                                    # NOT this on its own — fails without the emulator running
+firebase emulators:exec --project demo-seizuretracker-rules-test --only firestore,auth "./gradlew test --stacktrace"
+cd firestore-tests && npm ci && firebase emulators:exec --project demo-seizuretracker-rules-test --only firestore "npm test"
+```
+
+A plain `./gradlew build` right after either of those succeeds without the emulator (Gradle marks
+the test tasks UP-TO-DATE rather than re-running them) — that's what CI relies on; see
+`.github/workflows/ci.yml`. Emulator-backed tests use a hand-built `FirebaseOptions` (project id
+`demo-seizuretracker-rules-test`), not the real `app/google-services.json`, so they need zero
+secrets and can't touch a real Firebase project.
 
 ## Architecture
 
