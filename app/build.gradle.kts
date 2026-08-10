@@ -119,4 +119,10 @@ dependencies {
     testImplementation("androidx.test:core:1.7.0")
     testImplementation("androidx.test.ext:junit:1.3.0")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
+
+    // Phase 4: Compose UI tests for real screens, driven under Robolectric (no device/AVD
+    // needed) rather than instrumented androidTest. Versions come from the compose-bom
+    // platform import above.
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
