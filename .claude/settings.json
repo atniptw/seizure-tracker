@@ -14,14 +14,14 @@
             "type": "command",
             "command": ".claude/hooks/watch-main-ci.sh gitpush",
             "if": "Bash(git push*)",
-            "timeout": 30,
+            "timeout": 45,
             "statusMessage": "Checking for a freshly-triggered CI run on main..."
           },
           {
             "type": "command",
             "command": ".claude/hooks/watch-main-ci.sh ghmerge",
             "if": "Bash(gh pr merge*)",
-            "timeout": 30,
+            "timeout": 45,
             "statusMessage": "Checking for a freshly-triggered CI run on main..."
           }
         ]
