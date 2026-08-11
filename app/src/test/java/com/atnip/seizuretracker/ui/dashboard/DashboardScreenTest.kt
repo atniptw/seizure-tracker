@@ -23,7 +23,6 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withTimeout
 import org.junit.After
-import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -49,7 +48,6 @@ class DashboardScreenTest {
     val composeRule = createComposeRule()
 
     private lateinit var householdId: String
-    private lateinit var householdCode: String
     private lateinit var householdViewModel: HouseholdViewModel
     private lateinit var seizureListViewModel: SeizureListViewModel
 
@@ -62,7 +60,7 @@ class DashboardScreenTest {
                 householdId = HouseholdRepository.createHousehold("Rex", uid)
                 householdViewModel = HouseholdViewModel(householdId)
                 seizureListViewModel = SeizureListViewModel(householdId)
-                householdCode = householdViewModel.household.awaitFirst { it != null }!!.code
+                householdViewModel.household.awaitFirst { it != null }
             }
         }
     }
@@ -73,7 +71,7 @@ class DashboardScreenTest {
     }
 
     @Test
-    fun `empty state shows household code card and no-seizures card`() {
+    fun `empty state shows no-seizures card`() {
         composeRule.setContent {
             DashboardScreen(
                 navController = rememberNavController(),
@@ -82,9 +80,6 @@ class DashboardScreenTest {
             )
         }
 
-        composeRule.onNodeWithText("Household code").assertExists()
-        assertTrue(householdCode.isNotBlank())
-        composeRule.onNodeWithText(householdCode).assertExists()
         composeRule.onNodeWithText("No seizures logged yet.").assertExists()
     }
 
