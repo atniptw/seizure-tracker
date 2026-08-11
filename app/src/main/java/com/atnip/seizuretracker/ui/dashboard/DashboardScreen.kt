@@ -83,10 +83,6 @@ fun DashboardScreen(
                 SummaryCard(seizures)
             }
 
-            household?.code?.takeIf { it.isNotBlank() }?.let { code ->
-                item { HouseholdCodeCard(code, memberCount = household?.members?.size ?: 1) }
-            }
-
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -145,22 +141,6 @@ private fun SummaryCard(seizures: List<Seizure>) {
             }
             Spacer(Modifier.height(4.dp))
             Text("${seizures.size} total logged", style = MaterialTheme.typography.bodyMedium)
-        }
-    }
-}
-
-@Composable
-private fun HouseholdCodeCard(code: String, memberCount: Int) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text("Household code", style = MaterialTheme.typography.labelLarge)
-            Spacer(Modifier.height(4.dp))
-            Text(code, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(4.dp))
-            Text(
-                "Share this with anyone else who should be able to log seizures for this dog. $memberCount ${if (memberCount == 1) "device" else "devices"} connected.",
-                style = MaterialTheme.typography.bodyMedium
-            )
         }
     }
 }
