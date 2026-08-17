@@ -32,6 +32,7 @@ object SeizureSymptoms {
 
 data class Seizure(
     @DocumentId val id: String = "",
+    val petId: String = "",
     val timestampMillis: Long = 0L,
     val durationSeconds: Long = 0L,
     val seizureType: String = "",

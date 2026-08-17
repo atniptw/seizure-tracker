@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.IosShare
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Card
@@ -29,14 +30,23 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.atnip.seizuretracker.data.model.Seizure
-import com.atnip.seizuretracker.ui.household.HouseholdViewModel
+import com.atnip.seizuretracker.ui.common.AvatarInitial
+import com.atnip.seizuretracker.ui.common.Entry
+import com.atnip.seizuretracker.ui.common.EntryCard
+import com.atnip.seizuretracker.ui.common.PrimaryPillButton
+import com.atnip.seizuretracker.ui.entry.QuickAddSheet
+import com.atnip.seizuretracker.ui.healthnote.HealthNoteListViewModel
 import com.atnip.seizuretracker.ui.navigation.Destinations
+import com.atnip.seizuretracker.ui.pet.PetListViewModel
+import com.atnip.seizuretracker.ui.pet.PetSwitcherSheet
 import com.atnip.seizuretracker.ui.seizure.SeizureListViewModel
 import com.atnip.seizuretracker.util.DateTimeUtils
 
@@ -44,88 +54,159 @@ import com.atnip.seizuretracker.util.DateTimeUtils
 @Composable
 fun DashboardScreen(
     navController: NavController,
-    householdViewModel: HouseholdViewModel,
-    seizureListViewModel: SeizureListViewModel
+    seizureListViewModel: SeizureListViewModel,
+    healthNoteListViewModel: HealthNoteListViewModel,
+    petListViewModel: PetListViewModel
 ) {
-    val household by householdViewModel.household.collectAsState()
-    val seizures by seizureListViewModel.seizures.collectAsState()
+    val pets by petListViewModel.pets.collectAsState()
+    val activePet by petListViewModel.activePet.collectAsState()
+    val allSeizures by seizureListViewModel.seizures.collectAsState()
+    val allHealthNotes by healthNoteListViewModel.healthNotes.collectAsState()
+    val entries = remember(allSeizures, allHealthNotes, activePet) {
+        activePet?.let { pet ->
+            (allSeizures.filter { it.petId == pet.id }.map { Entry.SeizureEntry(it) } +
+                allHealthNotes.filter { it.petId == pet.id }.map { Entry.NoteEntry(it) })
+                .sortedByDescending { it.timestampMillis }
+        } ?: emptyList()
+    }
+    var showSwitcher by remember { mutableStateOf(false) }
+    var showQuickAdd by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(household?.dogName?.ifBlank { "Seizure Tracker" } ?: "Seizure Tracker") },
+                title = {
+                    if (activePet != null) {
+                        Row(
+                            modifier = Modifier.clickable { showSwitcher = true },
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            AvatarInitial(name = activePet!!.name, isPrimary = true, size = 32.dp)
+                            Text(activePet!!.name, modifier = Modifier.padding(start = 8.dp))
+                            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Switch pet")
+                        }
+                    } else {
+                        Text("Seizure Tracker")
+                    }
+                },
                 actions = {
                     IconButton(onClick = { navController.navigate(Destinations.EXPORT) }) {
                         Icon(Icons.Filled.IosShare, contentDescription = "Export for vet")
                     }
-                    IconButton(onClick = { navController.navigate(Destinations.DOG_PROFILE) }) {
-                        Icon(Icons.Filled.Settings, contentDescription = "Dog profile & settings")
+                    IconButton(onClick = { navController.navigate(Destinations.SETTINGS) }) {
+                        Icon(Icons.Filled.Settings, contentDescription = "Settings")
                     }
                 }
             )
         },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { navController.navigate(Destinations.ADD_SEIZURE) },
-                icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                text = { Text("Log a seizure") }
-            )
+            if (activePet != null) {
+                ExtendedFloatingActionButton(
+                    onClick = { showQuickAdd = true },
+                    icon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                    text = { Text("Log an entry") }
+                )
+            }
         }
     ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            item {
-                SummaryCard(seizures)
+        if (activePet == null) {
+            Column(
+                modifier = Modifier.fillMaxSize().padding(padding).padding(24.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Icon(Icons.Filled.Pets, contentDescription = null)
+                Spacer(Modifier.height(8.dp))
+                Text("Add your first pet to start logging", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(16.dp))
+                PrimaryPillButton(text = "Add a pet", onClick = { navController.navigate(Destinations.ADD_PET) })
             }
-
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Recent seizures", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    TextButton(onClick = { navController.navigate(Destinations.HISTORY) }) {
-                        Text("See all")
-                    }
-                }
-            }
-
-            if (seizures.isEmpty()) {
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
                 item {
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.padding(20.dp)) {
-                            Text("No seizures logged yet.", style = MaterialTheme.typography.bodyLarge)
+                    SummaryCard(entries)
+                }
+
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Recent entries", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        TextButton(onClick = { navController.navigate(Destinations.ENTRY_HISTORY) }) {
+                            Text("See all")
                         }
                     }
                 }
-            } else {
-                items(seizures.take(5)) { seizure ->
-                    RecentSeizureRow(seizure) {
-                        navController.navigate(Destinations.seizureDetail(seizure.id))
+
+                if (entries.isEmpty()) {
+                    item {
+                        Card(modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.padding(20.dp)) {
+                                Text("No entries logged yet.", style = MaterialTheme.typography.bodyLarge)
+                            }
+                        }
+                    }
+                } else {
+                    items(entries.take(5), key = { entryKey(it) }) { entry ->
+                        EntryCard(entry = entry, onClick = { navigateToEntry(navController, entry) })
                     }
                 }
             }
+        }
+
+        if (showSwitcher) {
+            PetSwitcherSheet(
+                pets = pets,
+                activePetId = activePet?.id,
+                onSelect = { pet -> petListViewModel.setActivePet(pet.id) },
+                onAddPet = { navController.navigate(Destinations.ADD_PET) },
+                onDismiss = { showSwitcher = false }
+            )
+        }
+
+        if (showQuickAdd && activePet != null) {
+            QuickAddSheet(
+                petName = activePet!!.name,
+                onSeizure = { navController.navigate(Destinations.ADD_SEIZURE) },
+                onHealthNote = { navController.navigate(Destinations.addHealthNote(activePet!!.id)) },
+                onDismiss = { showQuickAdd = false }
+            )
         }
     }
 }
 
+private fun entryKey(entry: Entry): String = when (entry) {
+    is Entry.SeizureEntry -> "seizure_${entry.seizure.id}"
+    is Entry.NoteEntry -> "note_${entry.note.id}"
+}
+
+private fun navigateToEntry(navController: NavController, entry: Entry) {
+    when (entry) {
+        is Entry.SeizureEntry -> navController.navigate(Destinations.seizureDetail(entry.seizure.id))
+        is Entry.NoteEntry -> navController.navigate(Destinations.editHealthNote(entry.note.id))
+    }
+}
+
 @Composable
-private fun SummaryCard(seizures: List<Seizure>) {
-    val last = seizures.firstOrNull()
-    val daysSince = last?.let {
+private fun SummaryCard(entries: List<Entry>) {
+    val seizures = entries.filterIsInstance<Entry.SeizureEntry>()
+    val lastSeizure = seizures.maxByOrNull { it.timestampMillis }
+    val daysSince = lastSeizure?.let {
         ((System.currentTimeMillis() - it.timestampMillis) / (1000L * 60 * 60 * 24)).toInt()
     }
     Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
         Column(modifier = Modifier.padding(20.dp)) {
             Icon(Icons.Filled.Pets, contentDescription = null)
             Spacer(Modifier.height(8.dp))
-            if (last == null) {
+            if (lastSeizure == null) {
                 Text("No seizures recorded yet", style = MaterialTheme.typography.titleMedium)
             } else {
                 Text(
@@ -137,30 +218,9 @@ private fun SummaryCard(seizures: List<Seizure>) {
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold
                 )
-                Text(DateTimeUtils.formatDateTime(last.timestampMillis), style = MaterialTheme.typography.bodyMedium)
-            }
-            Spacer(Modifier.height(4.dp))
-            Text("${seizures.size} total logged", style = MaterialTheme.typography.bodyMedium)
-        }
-    }
-}
-
-@Composable
-private fun RecentSeizureRow(seizure: Seizure, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(DateTimeUtils.formatDateTime(seizure.timestampMillis), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(2.dp))
-            Text(
-                seizure.seizureType.ifBlank { "Type not recorded" } + " · " + DateTimeUtils.formatDuration(seizure.durationSeconds),
-                style = MaterialTheme.typography.bodyMedium
-            )
-            if (seizure.loggedByName.isNotBlank()) {
-                Text("Logged by ${seizure.loggedByName}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.secondary)
+                Text(DateTimeUtils.formatDateTime(lastSeizure.timestampMillis), style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(4.dp))
+                Text("${seizures.size} seizure${if (seizures.size == 1) "" else "s"} logged", style = MaterialTheme.typography.bodyMedium)
             }
         }
     }

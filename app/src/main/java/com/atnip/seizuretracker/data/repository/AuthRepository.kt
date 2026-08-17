@@ -30,6 +30,11 @@ object AuthRepository {
         return result.user?.uid ?: error("Anonymous sign-in failed to return a user")
     }
 
+    /** For an anonymous uid, this is unrecoverable — the next sign-in mints a brand-new uid. */
+    fun signOut() {
+        auth.signOut()
+    }
+
     /** [context] must be an Activity context — Credential Manager needs it to show the account picker UI. */
     suspend fun signInWithGoogle(context: Context, webClientId: String): FirebaseUser {
         val option = GetSignInWithGoogleOption.Builder(webClientId).build()

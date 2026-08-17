@@ -1,5 +1,6 @@
 package com.atnip.seizuretracker.data.repository
 
+import com.atnip.seizuretracker.data.model.AuthMethods
 import com.atnip.seizuretracker.data.model.Seizure
 import com.atnip.seizuretracker.testutil.FirebaseEmulatorRule
 import com.atnip.seizuretracker.testutil.awaitFirst
@@ -33,7 +34,7 @@ class SeizureRepositoryTest {
             // household doc, so a real household (with this signed-in uid as a member) is
             // required fixture data even though SeizureRepository's own API only takes an id.
             val uid = AuthRepository.signInAnonymously()
-            householdId = HouseholdRepository.createHousehold("Rex", uid)
+            householdId = HouseholdRepository.createHousehold("Rex", uid, "Alex", AuthMethods.ANONYMOUS)
         }
     }
 
@@ -76,6 +77,21 @@ class SeizureRepositoryTest {
 
             val list = SeizureRepository.observeSeizures(householdId).awaitFirst { it.size == 3 }
             assertEquals(listOf("newest", "middle", "oldest"), list.map { it.notes })
+        }
+    }
+
+    @Test
+    fun `petId round-trips through add and update`() = runBlocking {
+        withTimeout(5000) {
+            val seizure = Seizure(petId = "pet-1", timestampMillis = 1_000L, notes = "first")
+            SeizureRepository.addSeizure(householdId, seizure)
+
+            val added = SeizureRepository.observeSeizures(householdId).awaitFirst { it.isNotEmpty() }[0]
+            assertEquals("pet-1", added.petId)
+
+            SeizureRepository.updateSeizure(householdId, added.copy(petId = "pet-2"))
+            val fetched = SeizureRepository.getSeizureOnce(householdId, added.id)
+            assertEquals("pet-2", fetched?.petId)
         }
     }
 }

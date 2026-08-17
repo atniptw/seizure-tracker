@@ -24,8 +24,14 @@ object HouseholdRepository {
     // exists as its own get()-by-id lookup instead.
     private fun codeIndex() = db.collection("codeIndex")
 
-    /** Creates a brand-new household for a dog and returns its Firestore doc id. */
-    suspend fun createHousehold(dogName: String, ownerUid: String): String {
+    /**
+     * Creates a brand-new household and returns its Firestore doc id. Also writes the creator's
+     * own [MemberProfile] doc — a separate write *after* the household+codeIndex batch commits,
+     * since by then the creator is already a committed member and no rule-evaluation ordering
+     * questions arise. No pet is created here — a fresh household lands on the dashboard's
+     * empty state, and the first pet is added from there (see `ui/pet/AddEditPetScreen.kt`).
+     */
+    suspend fun createHousehold(householdName: String, ownerUid: String, displayName: String, authMethod: String): String {
         var code: String
         // Extremely unlikely to collide at 6 chars, but check anyway.
         do {
@@ -36,7 +42,7 @@ object HouseholdRepository {
         val household = Household(
             id = ref.id,
             code = code,
-            dogName = dogName,
+            name = householdName,
             members = listOf(ownerUid),
             createdAtMillis = System.currentTimeMillis()
         )
@@ -45,6 +51,8 @@ object HouseholdRepository {
         batch.set(ref, household)
         batch.set(codeIndex().document(code), mapOf("householdId" to ref.id))
         batch.commit().await()
+
+        MemberRepository.upsertOwnProfile(ref.id, ownerUid, displayName, authMethod)
 
         return ref.id
     }
@@ -56,14 +64,38 @@ object HouseholdRepository {
         return snapshot.getString("householdId")
     }
 
-    /** Adds [uid] to a household's member list so their device can read/write its data. */
-    suspend fun joinHousehold(householdId: String, uid: String) {
+    /**
+     * Adds [uid] to a household's member list so their device can read/write its data, then
+     * writes their own [MemberProfile] doc as a second, non-batched write (the `members` rule
+     * for the profile doc itself requires the caller already be a household member, so the
+     * membership write has to land first).
+     */
+    suspend fun joinHousehold(householdId: String, uid: String, displayName: String, authMethod: String) {
         households().document(householdId)
             .update("members", FieldValue.arrayUnion(uid))
             .await()
+        MemberRepository.upsertOwnProfile(householdId, uid, displayName, authMethod)
     }
 
-    /** Live updates to a single household's profile (dog info, meds, member list). */
+    /** Renames the household (e.g. "The Bear & Milo house"). */
+    suspend fun updateHouseholdName(householdId: String, name: String) {
+        households().document(householdId).update("name", name).await()
+    }
+
+    /**
+     * Removes [uid] from the household's member list and deletes their profile doc. Deletes the
+     * profile *before* the array removal: the profile-doc delete rule requires the caller still
+     * be a household member at the time of that write, which would fail on a self-removal if
+     * the array removal (which drops the caller from `members`) had already landed first.
+     */
+    suspend fun removeMember(householdId: String, uid: String) {
+        MemberRepository.deleteMemberProfile(householdId, uid)
+        households().document(householdId)
+            .update("members", FieldValue.arrayRemove(uid))
+            .await()
+    }
+
+    /** Live updates to a single household's profile (name, code, member list). */
     fun observeHousehold(householdId: String): Flow<Household?> = callbackFlow {
         val registration = households().document(householdId)
             .addSnapshotListener { snapshot, error ->
@@ -74,36 +106,5 @@ object HouseholdRepository {
                 trySend(snapshot?.toObject(Household::class.java))
             }
         awaitClose { registration.remove() }
-    }
-
-    suspend fun updateDogProfile(
-        householdId: String,
-        dogName: String,
-        dogBreed: String,
-        dogDobMillis: Long?,
-        dogWeightKg: Double?,
-        diagnosisDateMillis: Long?,
-        vetName: String,
-        vetPhone: String,
-        vetEmail: String
-    ) {
-        households().document(householdId).update(
-            mapOf(
-                "dogName" to dogName,
-                "dogBreed" to dogBreed,
-                "dogDobMillis" to dogDobMillis,
-                "dogWeightKg" to dogWeightKg,
-                "diagnosisDateMillis" to diagnosisDateMillis,
-                "vetName" to vetName,
-                "vetPhone" to vetPhone,
-                "vetEmail" to vetEmail
-            )
-        ).await()
-    }
-
-    suspend fun updateMedications(householdId: String, medications: List<com.atnip.seizuretracker.data.model.Medication>) {
-        households().document(householdId)
-            .update("medications", medications.map { mapOf("name" to it.name, "dose" to it.dose, "frequency" to it.frequency, "notes" to it.notes) })
-            .await()
     }
 }

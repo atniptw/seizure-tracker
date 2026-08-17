@@ -78,7 +78,7 @@ class WelcomeScreenTest {
             session.isSignedIn.awaitFirst { it }
             composeRule.waitForIdle()
 
-            composeRule.onNodeWithText("Set up a new dog").assertExists()
+            composeRule.onNodeWithText("Set up a household").assertExists()
             composeRule.onNodeWithText("Join with a household code").assertExists()
         }
     }
@@ -92,10 +92,10 @@ class WelcomeScreenTest {
             session.isSignedIn.awaitFirst { it }
             composeRule.waitForIdle()
 
-            composeRule.onNodeWithText("Set up a new dog").performClick()
+            composeRule.onNodeWithText("Set up a household").performClick()
             composeRule.waitForIdle()
 
-            composeRule.onNodeWithText("Dog's name").performTextInput("Rex")
+            composeRule.onNodeWithText("Household name").performTextInput("The Bear house")
             composeRule.onNodeWithText("Your name").performTextInput("Tom")
             composeRule.onNodeWithText("Create").performClick()
 

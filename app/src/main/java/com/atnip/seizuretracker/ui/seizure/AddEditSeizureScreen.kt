@@ -59,6 +59,7 @@ fun AddEditSeizureScreen(
     seizureListViewModel: SeizureListViewModel,
     displayName: String,
     uid: String,
+    activePetId: String,
     existingSeizureId: String?
 ) {
     val allSeizures by seizureListViewModel.seizures.collectAsState()
@@ -252,6 +253,7 @@ fun AddEditSeizureScreen(
                     saving = true
                     val seizure = Seizure(
                         id = existing?.id ?: "",
+                        petId = existing?.petId ?: activePetId,
                         timestampMillis = timestampMillis,
                         durationSeconds = (minutes.toLongOrNull() ?: 0L) * 60 + (seconds.toLongOrNull() ?: 0L),
                         seizureType = seizureType,

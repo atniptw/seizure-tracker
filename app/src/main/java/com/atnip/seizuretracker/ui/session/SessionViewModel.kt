@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.atnip.seizuretracker.R
 import com.atnip.seizuretracker.data.local.UserPrefs
+import com.atnip.seizuretracker.data.model.AuthMethods
 import com.atnip.seizuretracker.data.repository.AuthRepository
 import com.atnip.seizuretracker.data.repository.HouseholdRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -84,15 +85,16 @@ class SessionViewModel(private val appContext: Context) : ViewModel() {
         }
     }
 
-    fun createHousehold(dogName: String, yourName: String) {
+    fun createHousehold(householdName: String, yourName: String) {
         viewModelScope.launch {
             _error.value = null
             try {
-                val uid = AuthRepository.currentUser?.uid ?: error("Not signed in")
-                val householdId = HouseholdRepository.createHousehold(dogName, uid)
+                val user = AuthRepository.currentUser ?: error("Not signed in")
+                val authMethod = if (user.isAnonymous) AuthMethods.ANONYMOUS else AuthMethods.GOOGLE
+                val householdId = HouseholdRepository.createHousehold(householdName, user.uid, yourName, authMethod)
                 prefs.setHouseholdId(householdId)
                 prefs.setDisplayName(yourName)
-                _state.value = SessionState.Ready(householdId, uid, yourName)
+                _state.value = SessionState.Ready(householdId, user.uid, yourName)
             } catch (t: Throwable) {
                 _error.value = "Couldn't create household: ${t.message ?: "unknown error"}"
             }
@@ -103,19 +105,36 @@ class SessionViewModel(private val appContext: Context) : ViewModel() {
         viewModelScope.launch {
             _error.value = null
             try {
-                val uid = AuthRepository.currentUser?.uid ?: error("Not signed in")
+                val user = AuthRepository.currentUser ?: error("Not signed in")
+                val uid = user.uid
                 val householdId = HouseholdRepository.findHouseholdIdByCode(code)
                 if (householdId == null) {
                     _error.value = "No household found for code \"$code\". Double-check it with whoever shared it."
                     return@launch
                 }
-                HouseholdRepository.joinHousehold(householdId, uid)
+                val authMethod = if (user.isAnonymous) AuthMethods.ANONYMOUS else AuthMethods.GOOGLE
+                HouseholdRepository.joinHousehold(householdId, uid, yourName, authMethod)
                 prefs.setHouseholdId(householdId)
                 prefs.setDisplayName(yourName)
                 _state.value = SessionState.Ready(householdId, uid, yourName)
             } catch (t: Throwable) {
                 _error.value = "Couldn't join household: ${t.message ?: "unknown error"}"
             }
+        }
+    }
+
+    /**
+     * For an anonymous account this is unrecoverable — the next sign-in mints a brand-new uid
+     * with no link back to this household, so this really does end the session, not just log
+     * out of one device.
+     */
+    fun signOut() {
+        viewModelScope.launch {
+            AuthRepository.signOut()
+            prefs.clearHousehold()
+            prefs.setDisplayName("")
+            _isSignedIn.value = false
+            _state.value = SessionState.NeedsSetup
         }
     }
 

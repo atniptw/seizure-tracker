@@ -4,8 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.atnip.seizuretracker.data.model.Household
-import com.atnip.seizuretracker.data.model.Medication
+import com.atnip.seizuretracker.data.model.MemberProfile
 import com.atnip.seizuretracker.data.repository.HouseholdRepository
+import com.atnip.seizuretracker.data.repository.MemberRepository
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -16,27 +17,18 @@ class HouseholdViewModel(private val householdId: String) : ViewModel() {
     val household: StateFlow<Household?> = HouseholdRepository.observeHousehold(householdId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    fun updateDogProfile(
-        dogName: String,
-        dogBreed: String,
-        dogDobMillis: Long?,
-        dogWeightKg: Double?,
-        diagnosisDateMillis: Long?,
-        vetName: String,
-        vetPhone: String,
-        vetEmail: String
-    ) {
+    val members: StateFlow<List<MemberProfile>> = MemberRepository.observeMembers(householdId)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun updateHouseholdName(name: String) {
         viewModelScope.launch {
-            HouseholdRepository.updateDogProfile(
-                householdId, dogName, dogBreed, dogDobMillis, dogWeightKg,
-                diagnosisDateMillis, vetName, vetPhone, vetEmail
-            )
+            HouseholdRepository.updateHouseholdName(householdId, name)
         }
     }
 
-    fun updateMedications(medications: List<Medication>) {
+    fun removeMember(uid: String) {
         viewModelScope.launch {
-            HouseholdRepository.updateMedications(householdId, medications)
+            HouseholdRepository.removeMember(householdId, uid)
         }
     }
 

@@ -3,6 +3,7 @@
 package com.atnip.seizuretracker.ui.session
 
 import androidx.test.core.app.ApplicationProvider
+import com.atnip.seizuretracker.data.model.AuthMethods
 import com.atnip.seizuretracker.data.repository.AuthRepository
 import com.atnip.seizuretracker.data.repository.HouseholdRepository
 import com.atnip.seizuretracker.testutil.FirebaseEmulatorRule
@@ -70,7 +71,7 @@ class SessionViewModelTest {
     fun `joinHousehold with a valid code lands on Ready`() = runBlocking {
         withTimeout(5000) {
             val creatorUid = AuthRepository.signInAnonymously()
-            val fixtureHouseholdId = HouseholdRepository.createHousehold("Rex", creatorUid)
+            val fixtureHouseholdId = HouseholdRepository.createHousehold("Rex", creatorUid, "Alex", AuthMethods.ANONYMOUS)
             val code = HouseholdRepository.observeHousehold(fixtureHouseholdId).awaitFirst { it != null }!!.code
 
             com.google.firebase.auth.FirebaseAuth.getInstance().signOut()

@@ -9,6 +9,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.navigation.compose.rememberNavController
+import com.atnip.seizuretracker.data.model.AuthMethods
 import com.atnip.seizuretracker.data.model.Seizure
 import com.atnip.seizuretracker.data.repository.AuthRepository
 import com.atnip.seizuretracker.data.repository.HouseholdRepository
@@ -68,7 +69,7 @@ class AddEditSeizureScreenTest {
                 // household doc, so a real household is required fixture data even though
                 // SeizureListViewModel/SeizureRepository's own APIs only take an id.
                 val uid = AuthRepository.signInAnonymously()
-                HouseholdRepository.createHousehold("Rex", uid)
+                HouseholdRepository.createHousehold("Rex", uid, "Alex", AuthMethods.ANONYMOUS)
             }
         }
         viewModel = SeizureListViewModel(householdId)
@@ -88,6 +89,7 @@ class AddEditSeizureScreenTest {
                     seizureListViewModel = viewModel,
                     displayName = "Tom",
                     uid = "uid1",
+                    activePetId = "pet1",
                     existingSeizureId = null
                 )
             }
@@ -104,6 +106,7 @@ class AddEditSeizureScreenTest {
             assertEquals("test notes to save", saved.notes)
             assertEquals("Tom", saved.loggedByName)
             assertEquals("uid1", saved.loggedByUid)
+            assertEquals("pet1", saved.petId)
         }
     }
 
@@ -125,6 +128,7 @@ class AddEditSeizureScreenTest {
                     seizureListViewModel = viewModel,
                     displayName = "Tom",
                     uid = "uid1",
+                    activePetId = "pet1",
                     existingSeizureId = seededWithId.id
                 )
             }

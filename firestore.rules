@@ -47,6 +47,49 @@ service cloud.firestore {
         allow read, write: if request.auth != null &&
           request.auth.uid in get(/databases/$(database)/documents/households/$(householdId)).data.members;
       }
+
+      match /pets/{petId} {
+        allow read, write: if request.auth != null &&
+          request.auth.uid in get(/databases/$(database)/documents/households/$(householdId)).data.members;
+      }
+
+      match /vets/{vetId} {
+        allow read, write: if request.auth != null &&
+          request.auth.uid in get(/databases/$(database)/documents/households/$(householdId)).data.members;
+      }
+
+      match /petVetLinks/{linkId} {
+        allow read, write: if request.auth != null &&
+          request.auth.uid in get(/databases/$(database)/documents/households/$(householdId)).data.members;
+      }
+
+      match /healthNotes/{noteId} {
+        allow read, write: if request.auth != null &&
+          request.auth.uid in get(/databases/$(database)/documents/households/$(householdId)).data.members;
+      }
+
+      // Synced member metadata (display name, sign-in method) — never consulted for access
+      // control, `households.members` above remains the sole source of truth for that. Doc id
+      // is always the profile's own uid, so only that uid may create/edit it (prevents one
+      // member overwriting another's displayName/authMethod); any current member may delete
+      // another member's profile doc, since that's what makes the remove-member flow work.
+      match /members/{memberUid} {
+        allow read: if request.auth != null &&
+          request.auth.uid in get(/databases/$(database)/documents/households/$(householdId)).data.members;
+
+        // No get()-based membership check here (unlike read/delete below): this doc can only
+        // ever be the caller's own profile — uid == memberUid already rules out touching
+        // anyone else's — and create/join flows write this doc immediately after adding the
+        // uid to `households.members` in a *separate* preceding write. Requiring a fresh
+        // get() of the parent here races with that write landing (two separate requests,
+        // not guaranteed to serialize), so it's intentionally left out; a stray profile doc
+        // under a household the caller never joined is harmless, since the read rule above
+        // still hides it from everyone but real members.
+        allow create, update: if request.auth != null && request.auth.uid == memberUid;
+
+        allow delete: if request.auth != null &&
+          request.auth.uid in get(/databases/$(database)/documents/households/$(householdId)).data.members;
+      }
     }
   }
 }

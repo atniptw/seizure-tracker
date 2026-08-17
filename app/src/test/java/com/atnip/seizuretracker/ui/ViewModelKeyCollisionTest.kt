@@ -24,6 +24,8 @@ class ViewModelKeyCollisionTest {
 
     private class FakeHouseholdViewModel : ViewModel()
     private class FakeSeizureListViewModel : ViewModel()
+    private class FakePetListViewModel : ViewModel()
+    private class FakeHealthNoteListViewModel : ViewModel()
 
     private fun factoryFor(implClass: Class<out ViewModel>): ViewModelProvider.Factory =
         object : ViewModelProvider.Factory {
@@ -33,22 +35,32 @@ class ViewModelKeyCollisionTest {
         }
 
     @Test
-    fun `distinct per-type keys keep both viewmodels stable across recomposition`() {
+    fun `distinct per-type keys keep all viewmodels stable across recomposition`() {
         val store = ViewModelStore()
 
         val household1 = ViewModelProvider(store, factoryFor(FakeHouseholdViewModel::class.java))
             .get("household_abc", FakeHouseholdViewModel::class.java)
         val seizureList1 = ViewModelProvider(store, factoryFor(FakeSeizureListViewModel::class.java))
             .get("seizureList_abc", FakeSeizureListViewModel::class.java)
+        val petList1 = ViewModelProvider(store, factoryFor(FakePetListViewModel::class.java))
+            .get("petList_abc", FakePetListViewModel::class.java)
+        val healthNoteList1 = ViewModelProvider(store, factoryFor(FakeHealthNoteListViewModel::class.java))
+            .get("healthNoteList_abc", FakeHealthNoteListViewModel::class.java)
 
-        // Simulate a later recomposition re-requesting both by their own distinct keys.
+        // Simulate a later recomposition re-requesting all four by their own distinct keys.
         val household2 = ViewModelProvider(store, factoryFor(FakeHouseholdViewModel::class.java))
             .get("household_abc", FakeHouseholdViewModel::class.java)
         val seizureList2 = ViewModelProvider(store, factoryFor(FakeSeizureListViewModel::class.java))
             .get("seizureList_abc", FakeSeizureListViewModel::class.java)
+        val petList2 = ViewModelProvider(store, factoryFor(FakePetListViewModel::class.java))
+            .get("petList_abc", FakePetListViewModel::class.java)
+        val healthNoteList2 = ViewModelProvider(store, factoryFor(FakeHealthNoteListViewModel::class.java))
+            .get("healthNoteList_abc", FakeHealthNoteListViewModel::class.java)
 
         assertSame("HouseholdViewModel should survive under its own key", household1, household2)
         assertSame("SeizureListViewModel should survive under its own key", seizureList1, seizureList2)
+        assertSame("PetListViewModel should survive under its own key", petList1, petList2)
+        assertSame("HealthNoteListViewModel should survive under its own key", healthNoteList1, healthNoteList2)
     }
 
     @Test

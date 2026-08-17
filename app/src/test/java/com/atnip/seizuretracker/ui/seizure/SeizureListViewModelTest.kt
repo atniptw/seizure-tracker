@@ -2,6 +2,7 @@
 
 package com.atnip.seizuretracker.ui.seizure
 
+import com.atnip.seizuretracker.data.model.AuthMethods
 import com.atnip.seizuretracker.data.model.Seizure
 import com.atnip.seizuretracker.data.repository.AuthRepository
 import com.atnip.seizuretracker.data.repository.HouseholdRepository
@@ -44,7 +45,7 @@ class SeizureListViewModelTest {
                 // gate the seizures subcollection on membership of the parent household doc,
                 // so a real (if minimal) household fixture is required regardless.
                 val uid = AuthRepository.signInAnonymously()
-                HouseholdRepository.createHousehold("Rex", uid)
+                HouseholdRepository.createHousehold("Rex", uid, "Alex", AuthMethods.ANONYMOUS)
             }
         }
         viewModel = SeizureListViewModel(householdId)

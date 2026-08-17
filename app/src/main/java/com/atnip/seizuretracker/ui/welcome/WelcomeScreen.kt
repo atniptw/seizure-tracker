@@ -65,7 +65,7 @@ fun WelcomeScreen(session: SessionViewModel) {
             WelcomeMode.SIGN_IN -> SignInStep(session, error)
             WelcomeMode.CHOOSE -> {
                 Button(onClick = { mode = WelcomeMode.CREATE }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Set up a new dog")
+                    Text("Set up a household")
                 }
                 Spacer(Modifier.height(12.dp))
                 OutlinedButton(onClick = { mode = WelcomeMode.JOIN }, modifier = Modifier.fillMaxWidth()) {
@@ -111,15 +111,15 @@ private fun SignInStep(session: SessionViewModel, error: String?) {
 
 @Composable
 private fun CreateForm(session: SessionViewModel, error: String?, suggestedName: String?, onBack: () -> Unit) {
-    var dogName by rememberSaveable { mutableStateOf("") }
+    var householdName by rememberSaveable { mutableStateOf("") }
     var yourName by rememberSaveable { mutableStateOf(suggestedName.orEmpty()) }
     var submitting by remember { mutableStateOf(false) }
     androidx.compose.runtime.LaunchedEffect(error) { if (error != null) submitting = false }
 
     OutlinedTextField(
-        value = dogName,
-        onValueChange = { dogName = it },
-        label = { Text("Dog's name") },
+        value = householdName,
+        onValueChange = { householdName = it },
+        label = { Text("Household name") },
         modifier = Modifier.fillMaxWidth()
     )
     Spacer(Modifier.height(12.dp))
@@ -133,9 +133,9 @@ private fun CreateForm(session: SessionViewModel, error: String?, suggestedName:
     Button(
         onClick = {
             submitting = true
-            session.createHousehold(dogName.trim(), yourName.trim())
+            session.createHousehold(householdName.trim(), yourName.trim())
         },
-        enabled = dogName.isNotBlank() && yourName.isNotBlank() && !submitting,
+        enabled = householdName.isNotBlank() && yourName.isNotBlank() && !submitting,
         modifier = Modifier.fillMaxWidth(),
         colors = ButtonDefaults.buttonColors()
     ) {
