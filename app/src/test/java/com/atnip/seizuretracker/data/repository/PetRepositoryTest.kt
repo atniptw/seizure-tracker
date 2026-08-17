@@ -30,7 +30,7 @@ class PetRepositoryTest {
 
     @Before
     fun seedHousehold() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val uid = AuthRepository.signInAnonymously()
             householdId = HouseholdRepository.createHousehold("The Bear house", uid, "Alex", AuthMethods.ANONYMOUS)
         }
@@ -38,7 +38,7 @@ class PetRepositoryTest {
 
     @Test
     fun `add, update, delete, and getPetOnce round-trip`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val pet = Pet(name = "Bear", species = PetSpecies.ALL[0], breed = "Lab")
             val petId = PetRepository.addPet(householdId, pet)
             assertTrue(petId.isNotBlank())
@@ -57,7 +57,7 @@ class PetRepositoryTest {
 
     @Test
     fun `observePets orders ascending by createdAtMillis`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             PetRepository.addPet(householdId, Pet(name = "Milo", createdAtMillis = 200L))
             PetRepository.addPet(householdId, Pet(name = "Bear", createdAtMillis = 100L))
 

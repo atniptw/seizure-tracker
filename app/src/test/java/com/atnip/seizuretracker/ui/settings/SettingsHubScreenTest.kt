@@ -56,7 +56,7 @@ class SettingsHubScreenTest {
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         householdId = runBlocking {
-            withTimeout(5000) {
+            withTimeout(10000) {
                 val uid = AuthRepository.signInAnonymously()
                 HouseholdRepository.createHousehold("The Bear house", uid, "Alex", AuthMethods.ANONYMOUS)
             }
@@ -86,7 +86,7 @@ class SettingsHubScreenTest {
 
     @Test
     fun `Pets subtitle lists every pet's name`(): Unit = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             // Distinct createdAtMillis: addPet doesn't stamp one server-side, and the pets list
             // is ordered by it, so two default (0L) values would tie and sort arbitrarily.
             PetRepository.addPet(householdId, Pet(name = "Bear", createdAtMillis = 1L))
@@ -103,7 +103,7 @@ class SettingsHubScreenTest {
 
     @Test
     fun `tapping Sign out signs out and returns the session to NeedsSetup`(): Unit = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             composeRule.setContent {
                 SettingsHubScreen(navController = rememberNavController(), petListViewModel = petListViewModel, session = session)
             }

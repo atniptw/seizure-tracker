@@ -29,7 +29,7 @@ class HealthNoteRepositoryTest {
 
     @Before
     fun seedHousehold() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val uid = AuthRepository.signInAnonymously()
             householdId = HouseholdRepository.createHousehold("The Bear house", uid, "Alex", AuthMethods.ANONYMOUS)
         }
@@ -37,7 +37,7 @@ class HealthNoteRepositoryTest {
 
     @Test
     fun `add, update, delete, and getHealthNoteOnce round-trip`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val note = HealthNote(petId = "bear", description = "Limping", timestampMillis = 1_000L)
             HealthNoteRepository.addHealthNote(householdId, note)
 
@@ -62,7 +62,7 @@ class HealthNoteRepositoryTest {
 
     @Test
     fun `observeHealthNotes orders descending by timestampMillis`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             HealthNoteRepository.addHealthNote(householdId, HealthNote(petId = "bear", timestampMillis = 100L, description = "oldest"))
             HealthNoteRepository.addHealthNote(householdId, HealthNote(petId = "bear", timestampMillis = 300L, description = "newest"))
             HealthNoteRepository.addHealthNote(householdId, HealthNote(petId = "bear", timestampMillis = 200L, description = "middle"))

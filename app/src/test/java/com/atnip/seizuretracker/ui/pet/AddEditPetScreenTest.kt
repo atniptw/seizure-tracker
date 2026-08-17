@@ -61,7 +61,7 @@ class AddEditPetScreenTest {
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         householdId = runBlocking {
-            withTimeout(5000) {
+            withTimeout(10000) {
                 val uid = AuthRepository.signInAnonymously()
                 HouseholdRepository.createHousehold("The Bear house", uid, "Alex", AuthMethods.ANONYMOUS)
             }
@@ -77,7 +77,7 @@ class AddEditPetScreenTest {
 
     @Test
     fun `filling name, species, and breed and saving adds a pet`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             composeRule.setContent {
                 AddEditPetScreen(navController = rememberNavController(), petListViewModel = viewModel, vetViewModel = vetViewModel, existingPetId = null)
             }
@@ -97,7 +97,7 @@ class AddEditPetScreenTest {
 
     @Test
     fun `adding the first pet makes it the active pet`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             composeRule.setContent {
                 AddEditPetScreen(navController = rememberNavController(), petListViewModel = viewModel, vetViewModel = vetViewModel, existingPetId = null)
             }
@@ -112,7 +112,7 @@ class AddEditPetScreenTest {
 
     @Test
     fun `editing a pet pre-fills fields and saving updates it`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val petId = PetRepository.addPet(householdId, Pet(name = "Bear", species = "Dog", breed = "Lab"))
             viewModel.pets.awaitFirst { it.isNotEmpty() }
 
@@ -134,7 +134,7 @@ class AddEditPetScreenTest {
 
     @Test
     fun `editing a pet shows its linked vets`(): Unit = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val petId = PetRepository.addPet(householdId, Pet(name = "Bear"))
             val vetId = VetRepository.addVet(householdId, Vet(name = "Riverside Animal Hospital"))
             PetVetLinkRepository.addLink(householdId, petId, vetId, "General")

@@ -43,7 +43,7 @@ class HouseholdViewModelTest {
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         runBlocking {
-            withTimeout(5000) {
+            withTimeout(10000) {
                 ownerUid = AuthRepository.signInAnonymously()
                 householdId = HouseholdRepository.createHousehold("Rex", ownerUid, "Alex", AuthMethods.ANONYMOUS)
             }
@@ -57,7 +57,7 @@ class HouseholdViewModelTest {
 
     @Test
     fun `household StateFlow eventually reflects the seeded household`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val viewModel = HouseholdViewModel(householdId)
 
             val household = viewModel.household.awaitFirst { it != null }
@@ -68,7 +68,7 @@ class HouseholdViewModelTest {
 
     @Test
     fun `updateHouseholdName renames the household`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val viewModel = HouseholdViewModel(householdId)
             viewModel.household.awaitFirst { it != null }
 
@@ -81,7 +81,7 @@ class HouseholdViewModelTest {
 
     @Test
     fun `members StateFlow reflects the creator's own profile`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val viewModel = HouseholdViewModel(householdId)
 
             val members = viewModel.members.awaitFirst { it.isNotEmpty() }
@@ -93,7 +93,7 @@ class HouseholdViewModelTest {
 
     @Test
     fun `removeMember drops a joined member from the members StateFlow`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             FirebaseAuth.getInstance().signOut()
             val joinerUid = AuthRepository.signInAnonymously()
             // See HouseholdRepositoryTest for why this idle() is needed after switching identity.

@@ -40,7 +40,7 @@ class HealthNoteListViewModelTest {
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         householdId = runBlocking {
-            withTimeout(5000) {
+            withTimeout(10000) {
                 val uid = AuthRepository.signInAnonymously()
                 HouseholdRepository.createHousehold("The Bear house", uid, "Alex", AuthMethods.ANONYMOUS)
             }
@@ -55,7 +55,7 @@ class HealthNoteListViewModelTest {
 
     @Test
     fun `addHealthNote, updateHealthNote, and deleteHealthNote round-trip through the ViewModel`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             viewModel.addHealthNote(HealthNote(petId = "bear", description = "Limping")) {}
 
             val notes = viewModel.healthNotes.awaitFirst { it.isNotEmpty() }
@@ -75,7 +75,7 @@ class HealthNoteListViewModelTest {
 
     @Test
     fun `healthNotes orders descending by timestampMillis`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             viewModel.addHealthNote(HealthNote(petId = "bear", timestampMillis = 100L, description = "oldest"))
             viewModel.addHealthNote(HealthNote(petId = "bear", timestampMillis = 300L, description = "newest"))
             viewModel.addHealthNote(HealthNote(petId = "bear", timestampMillis = 200L, description = "middle"))

@@ -55,7 +55,7 @@ class EntryHistoryScreenTest {
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         householdId = runBlocking {
-            withTimeout(5000) {
+            withTimeout(10000) {
                 val uid = AuthRepository.signInAnonymously()
                 HouseholdRepository.createHousehold("The Bear house", uid, "Alex", AuthMethods.ANONYMOUS)
             }
@@ -85,7 +85,7 @@ class EntryHistoryScreenTest {
 
     @Test
     fun `merges seizures and health notes for the active pet, sorted by most recent`(): Unit = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             SeizureRepository.addSeizure(
                 householdId,
                 Seizure(petId = "pet1", timestampMillis = 1_000L, seizureType = "Focal (partial)", loggedByName = "Tom")

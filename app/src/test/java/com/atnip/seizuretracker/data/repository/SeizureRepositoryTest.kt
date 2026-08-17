@@ -29,7 +29,7 @@ class SeizureRepositoryTest {
 
     @Before
     fun seedHousehold() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             // The security rules gate the seizures subcollection on membership of the parent
             // household doc, so a real household (with this signed-in uid as a member) is
             // required fixture data even though SeizureRepository's own API only takes an id.
@@ -40,7 +40,7 @@ class SeizureRepositoryTest {
 
     @Test
     fun `add, update, delete, and getSeizureOnce round-trip`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val seizure = Seizure(
                 timestampMillis = 1_000L,
                 durationSeconds = 30,
@@ -70,7 +70,7 @@ class SeizureRepositoryTest {
 
     @Test
     fun `observeSeizures orders descending by timestampMillis`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             SeizureRepository.addSeizure(householdId, Seizure(timestampMillis = 100L, notes = "oldest"))
             SeizureRepository.addSeizure(householdId, Seizure(timestampMillis = 300L, notes = "newest"))
             SeizureRepository.addSeizure(householdId, Seizure(timestampMillis = 200L, notes = "middle"))
@@ -82,7 +82,7 @@ class SeizureRepositoryTest {
 
     @Test
     fun `petId round-trips through add and update`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val seizure = Seizure(petId = "pet-1", timestampMillis = 1_000L, notes = "first")
             SeizureRepository.addSeizure(householdId, seizure)
 

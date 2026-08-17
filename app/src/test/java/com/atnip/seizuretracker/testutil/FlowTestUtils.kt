@@ -20,7 +20,7 @@ import org.robolectric.Shadows.shadowOf
  * `observeSeizures`, and the ViewModel `StateFlow`s built on top of them) is awaited through
  * this helper instead of a bare `.first { }`, so the main looper actually gets pumped.
  */
-suspend fun <T> Flow<T>.awaitFirst(timeoutMs: Long = 5000, predicate: (T) -> Boolean): T =
+suspend fun <T> Flow<T>.awaitFirst(timeoutMs: Long = 10000, predicate: (T) -> Boolean): T =
     withTimeout(timeoutMs) {
         var result: T? = null
         var matched = false

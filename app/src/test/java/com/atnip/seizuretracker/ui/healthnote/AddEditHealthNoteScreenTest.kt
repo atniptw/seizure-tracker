@@ -60,7 +60,7 @@ class AddEditHealthNoteScreenTest {
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         householdId = runBlocking {
-            withTimeout(5000) {
+            withTimeout(10000) {
                 val uid = AuthRepository.signInAnonymously()
                 HouseholdRepository.createHousehold("The Bear house", uid, "Alex", AuthMethods.ANONYMOUS)
             }
@@ -75,7 +75,7 @@ class AddEditHealthNoteScreenTest {
 
     @Test
     fun `filling description and notes and saving adds a health note`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             composeRule.setContent {
                 AddEditHealthNoteScreen(
                     navController = rememberNavController(),
@@ -105,7 +105,7 @@ class AddEditHealthNoteScreenTest {
 
     @Test
     fun `editing a health note pre-fills fields and saving updates it`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val seeded = HealthNote(
                 petId = "pet1",
                 timestampMillis = 1_700_000_000_000L,

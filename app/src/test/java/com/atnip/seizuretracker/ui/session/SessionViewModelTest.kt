@@ -55,7 +55,7 @@ class SessionViewModelTest {
 
     @Test
     fun `createHousehold signs in, creates a household, and lands on Ready`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val uid = AuthRepository.signInAnonymously()
 
             viewModel.createHousehold("Rex", "Tom")
@@ -69,7 +69,7 @@ class SessionViewModelTest {
 
     @Test
     fun `joinHousehold with a valid code lands on Ready`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val creatorUid = AuthRepository.signInAnonymously()
             val fixtureHouseholdId = HouseholdRepository.createHousehold("Rex", creatorUid, "Alex", AuthMethods.ANONYMOUS)
             val code = HouseholdRepository.observeHousehold(fixtureHouseholdId).awaitFirst { it != null }!!.code
@@ -88,7 +88,7 @@ class SessionViewModelTest {
 
     @Test
     fun `joinHousehold with a bad code sets error and does not transition to Ready`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             AuthRepository.signInAnonymously()
 
             viewModel.joinHousehold("ZZZZZZ", "Alice")

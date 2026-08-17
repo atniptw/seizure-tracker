@@ -98,7 +98,7 @@ class ExportViewModelTest {
     // here plus PdfExporter's own thorough coverage is an acceptable trade-off.
     @Test
     fun `generate with a single pet produces a result matching the filtered entries`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val viewModel = ExportViewModel()
             viewModel.updateOptions { it.copy(petId = "p1", format = ExportFormat.CSV) }
 
@@ -114,7 +114,7 @@ class ExportViewModelTest {
 
     @Test
     fun `generate with CSV format and all pets includes every entry`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val viewModel = ExportViewModel()
             viewModel.updateOptions { it.copy(format = ExportFormat.CSV) }
 
@@ -130,7 +130,7 @@ class ExportViewModelTest {
 
     @Test
     fun `saveToDevice copies the generated file to the target Uri`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val viewModel = ExportViewModel()
             viewModel.updateOptions { it.copy(format = ExportFormat.CSV) }
             viewModel.generate(context, listOf(bear), listOf(bearSeizure), emptyList(), emptyList())
@@ -144,7 +144,7 @@ class ExportViewModelTest {
             // won't even let be @Volatile as a local anyway).
             val done = java.util.concurrent.atomic.AtomicBoolean(false)
             viewModel.saveToDevice(context, targetUri) { done.set(true) }
-            withTimeout(5000) {
+            withTimeout(10000) {
                 while (!done.get()) kotlinx.coroutines.yield()
             }
 

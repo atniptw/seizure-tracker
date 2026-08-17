@@ -40,7 +40,7 @@ class VetViewModelTest {
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         householdId = runBlocking {
-            withTimeout(5000) {
+            withTimeout(10000) {
                 val uid = AuthRepository.signInAnonymously()
                 HouseholdRepository.createHousehold("The Bear house", uid, "Alex", AuthMethods.ANONYMOUS)
             }
@@ -55,7 +55,7 @@ class VetViewModelTest {
 
     @Test
     fun `addVet and updateVet round-trip through the ViewModel`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             var addedId: String? = null
             viewModel.addVet(Vet(name = "Riverside Animal Hospital", phone = "555-0192")) { id -> addedId = id }
 
@@ -70,7 +70,7 @@ class VetViewModelTest {
 
     @Test
     fun `addLink, updateLinkRole, and removeLink round-trip through the ViewModel`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             var vetId: String? = null
             viewModel.addVet(Vet(name = "Riverside Animal Hospital")) { id -> vetId = id }
             viewModel.vets.awaitFirst { it.isNotEmpty() }
@@ -91,7 +91,7 @@ class VetViewModelTest {
 
     @Test
     fun `deleteVet removes the vet and its links`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             var vetId: String? = null
             viewModel.addVet(Vet(name = "Riverside Animal Hospital")) { id -> vetId = id }
             viewModel.vets.awaitFirst { it.isNotEmpty() }

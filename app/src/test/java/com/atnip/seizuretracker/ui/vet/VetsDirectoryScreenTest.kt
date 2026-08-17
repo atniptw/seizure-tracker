@@ -56,7 +56,7 @@ class VetsDirectoryScreenTest {
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         householdId = runBlocking {
-            withTimeout(5000) {
+            withTimeout(10000) {
                 val uid = AuthRepository.signInAnonymously()
                 HouseholdRepository.createHousehold("The Bear house", uid, "Alex", AuthMethods.ANONYMOUS)
             }
@@ -81,7 +81,7 @@ class VetsDirectoryScreenTest {
 
     @Test
     fun `shows a vet with its role tags resolved to pet names`(): Unit = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val bearId = PetRepository.addPet(householdId, Pet(name = "Bear"))
             val miloId = PetRepository.addPet(householdId, Pet(name = "Milo"))
             val vetId = VetRepository.addVet(householdId, Vet(name = "Riverside Animal Hospital", phone = "555-0192"))

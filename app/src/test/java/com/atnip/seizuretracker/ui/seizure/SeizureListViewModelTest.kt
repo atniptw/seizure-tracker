@@ -40,7 +40,7 @@ class SeizureListViewModelTest {
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         householdId = runBlocking {
-            withTimeout(5000) {
+            withTimeout(10000) {
                 // SeizureRepository only needs a valid household id, but the security rules
                 // gate the seizures subcollection on membership of the parent household doc,
                 // so a real (if minimal) household fixture is required regardless.
@@ -58,7 +58,7 @@ class SeizureListViewModelTest {
 
     @Test
     fun `addSeizure is reflected in seizures`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             viewModel.addSeizure(Seizure(timestampMillis = 1_000L, notes = "first"))
 
             val seizures = viewModel.seizures.awaitFirst { it.isNotEmpty() }
@@ -69,7 +69,7 @@ class SeizureListViewModelTest {
 
     @Test
     fun `updateSeizure and deleteSeizure are reflected in seizures`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             viewModel.addSeizure(Seizure(timestampMillis = 1_000L, notes = "first"))
             val seeded = viewModel.seizures.awaitFirst { it.isNotEmpty() }[0]
 

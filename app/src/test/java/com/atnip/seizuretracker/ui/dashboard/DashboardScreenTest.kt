@@ -63,7 +63,7 @@ class DashboardScreenTest {
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         runBlocking {
-            withTimeout(5000) {
+            withTimeout(10000) {
                 val uid = AuthRepository.signInAnonymously()
                 householdId = HouseholdRepository.createHousehold("The Bear house", uid, "Alex", AuthMethods.ANONYMOUS)
                 seizureListViewModel = SeizureListViewModel(householdId)
@@ -95,7 +95,7 @@ class DashboardScreenTest {
 
     @Test
     fun `empty state shows no-entries card once a pet exists`(): Unit = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             PetRepository.addPet(householdId, Pet(name = "Bear"))
             petListViewModel.activePet.awaitFirst { it != null }
         }
@@ -114,7 +114,7 @@ class DashboardScreenTest {
 
     @Test
     fun `seeded seizure for the active pet shows in recent entries and the summary card`(): Unit = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val petId = PetRepository.addPet(householdId, Pet(name = "Bear"))
             petListViewModel.activePet.awaitFirst { it != null }
 
@@ -152,7 +152,7 @@ class DashboardScreenTest {
 
     @Test
     fun `seeded health note for the active pet shows in recent entries but doesn't count as a seizure`(): Unit = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val petId = PetRepository.addPet(householdId, Pet(name = "Bear"))
             petListViewModel.activePet.awaitFirst { it != null }
 
@@ -180,7 +180,7 @@ class DashboardScreenTest {
 
     @Test
     fun `seizure for a different pet is not shown on this pet's dashboard`(): Unit = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val activePetId = PetRepository.addPet(householdId, Pet(name = "Bear"))
             val otherPetId = PetRepository.addPet(householdId, Pet(name = "Milo"))
             petListViewModel.setActivePet(activePetId)

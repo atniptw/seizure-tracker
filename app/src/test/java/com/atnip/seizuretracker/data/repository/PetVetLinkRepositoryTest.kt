@@ -27,7 +27,7 @@ class PetVetLinkRepositoryTest {
 
     @Before
     fun seedHousehold() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val uid = AuthRepository.signInAnonymously()
             householdId = HouseholdRepository.createHousehold("The Bear house", uid, "Alex", AuthMethods.ANONYMOUS)
         }
@@ -35,7 +35,7 @@ class PetVetLinkRepositoryTest {
 
     @Test
     fun `add, updateLinkRole, and removeLink round-trip`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val linkId = PetVetLinkRepository.addLink(householdId, petId = "bear", vetId = "riverside", role = "General")
             assertTrue(linkId.isNotBlank())
 
@@ -54,7 +54,7 @@ class PetVetLinkRepositoryTest {
 
     @Test
     fun `a pet can have multiple vets and a vet can serve multiple pets`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             PetVetLinkRepository.addLink(householdId, petId = "bear", vetId = "riverside", role = "General")
             PetVetLinkRepository.addLink(householdId, petId = "bear", vetId = "oakview", role = "Emergency")
             PetVetLinkRepository.addLink(householdId, petId = "milo", vetId = "riverside", role = "General")

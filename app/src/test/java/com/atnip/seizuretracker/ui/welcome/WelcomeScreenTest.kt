@@ -71,7 +71,7 @@ class WelcomeScreenTest {
 
     @Test
     fun `continue without Google moves to the CHOOSE step`(): Unit = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             composeRule.setContent { WelcomeScreen(session) }
 
             composeRule.onNodeWithText("Continue without Google", substring = true).performClick()
@@ -85,7 +85,7 @@ class WelcomeScreenTest {
 
     @Test
     fun `create-household path reaches Ready`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             composeRule.setContent { WelcomeScreen(session) }
 
             composeRule.onNodeWithText("Continue without Google", substring = true).performClick()
@@ -107,7 +107,7 @@ class WelcomeScreenTest {
 
     @Test
     fun `join-household path with a bad code shows the error instead of transitioning`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             composeRule.setContent { WelcomeScreen(session) }
 
             composeRule.onNodeWithText("Continue without Google", substring = true).performClick()

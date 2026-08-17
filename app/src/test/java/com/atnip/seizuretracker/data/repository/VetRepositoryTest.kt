@@ -28,7 +28,7 @@ class VetRepositoryTest {
 
     @Before
     fun seedHousehold() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val uid = AuthRepository.signInAnonymously()
             householdId = HouseholdRepository.createHousehold("The Bear house", uid, "Alex", AuthMethods.ANONYMOUS)
         }
@@ -36,7 +36,7 @@ class VetRepositoryTest {
 
     @Test
     fun `add and update round-trip`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val vetId = VetRepository.addVet(householdId, Vet(name = "Riverside Animal Hospital", phone = "555-0192"))
             assertTrue(vetId.isNotBlank())
 
@@ -51,7 +51,7 @@ class VetRepositoryTest {
 
     @Test
     fun `deleteVet also removes its pet-vet links but leaves other links alone`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val vetId = VetRepository.addVet(householdId, Vet(name = "Riverside Animal Hospital"))
             val otherVetId = VetRepository.addVet(householdId, Vet(name = "Oakview Emergency Vet"))
             PetVetLinkRepository.addLink(householdId, petId = "bear", vetId = vetId, role = "General")

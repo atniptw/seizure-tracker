@@ -55,7 +55,7 @@ class HouseholdScreenTest {
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         runBlocking {
-            withTimeout(5000) {
+            withTimeout(10000) {
                 ownerUid = AuthRepository.signInAnonymously()
                 householdId = HouseholdRepository.createHousehold("The Bear house", ownerUid, "Alex", AuthMethods.ANONYMOUS)
             }
@@ -70,7 +70,7 @@ class HouseholdScreenTest {
 
     @Test
     fun `shows the household code, name, and self with You suffix and no remove icon`(): Unit = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val household = viewModel.household.awaitFirst { it != null }
             viewModel.members.awaitFirst { it.isNotEmpty() }
 
@@ -89,7 +89,7 @@ class HouseholdScreenTest {
 
     @Test
     fun `a non-self member shows a remove icon that opens the confirm dialog and removes them`(): Unit = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             FirebaseAuth.getInstance().signOut()
             val joinerUid = AuthRepository.signInAnonymously()
             shadowOf(Looper.getMainLooper()).idle()

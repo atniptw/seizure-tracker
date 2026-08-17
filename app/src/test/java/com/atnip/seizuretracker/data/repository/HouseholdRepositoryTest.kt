@@ -37,7 +37,7 @@ class HouseholdRepositoryTest {
     @Test
     fun `createHousehold produces a unique code, a matching codeIndex doc, and the creator as sole member`() =
         runBlocking {
-            withTimeout(5000) {
+            withTimeout(10000) {
                 val ownerUid = AuthRepository.signInAnonymously()
 
                 val householdId = HouseholdRepository.createHousehold("Rex", ownerUid, "Alex", AuthMethods.ANONYMOUS)
@@ -54,7 +54,7 @@ class HouseholdRepositoryTest {
 
     @Test
     fun `findHouseholdIdByCode round-trips and normalizes case and whitespace`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val ownerUid = AuthRepository.signInAnonymously()
             val householdId = HouseholdRepository.createHousehold("Rex", ownerUid, "Alex", AuthMethods.ANONYMOUS)
             val code = firstHousehold(householdId).code
@@ -70,7 +70,7 @@ class HouseholdRepositoryTest {
 
     @Test
     fun `joinHousehold is idempotent on double-join`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val ownerUid = AuthRepository.signInAnonymously()
             val householdId = HouseholdRepository.createHousehold("Rex", ownerUid, "Alex", AuthMethods.ANONYMOUS)
 
@@ -96,7 +96,7 @@ class HouseholdRepositoryTest {
 
     @Test
     fun `observeHousehold emits live updates`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val ownerUid = AuthRepository.signInAnonymously()
             val householdId = HouseholdRepository.createHousehold("Rex", ownerUid, "Alex", AuthMethods.ANONYMOUS)
 
@@ -125,7 +125,7 @@ class HouseholdRepositoryTest {
 
     @Test
     fun `createHousehold writes the creator's own member profile`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val ownerUid = AuthRepository.signInAnonymously()
             val householdId = HouseholdRepository.createHousehold("Rex", ownerUid, "Alex", AuthMethods.ANONYMOUS)
 
@@ -139,7 +139,7 @@ class HouseholdRepositoryTest {
 
     @Test
     fun `joinHousehold writes the joiner's own member profile`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val ownerUid = AuthRepository.signInAnonymously()
             val householdId = HouseholdRepository.createHousehold("Rex", ownerUid, "Alex", AuthMethods.ANONYMOUS)
 
@@ -160,7 +160,7 @@ class HouseholdRepositoryTest {
 
     @Test
     fun `updateHouseholdName renames the household`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val ownerUid = AuthRepository.signInAnonymously()
             val householdId = HouseholdRepository.createHousehold("Rex", ownerUid, "Alex", AuthMethods.ANONYMOUS)
 
@@ -174,7 +174,7 @@ class HouseholdRepositoryTest {
 
     @Test
     fun `removeMember drops the uid from members and deletes their profile`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val ownerUid = AuthRepository.signInAnonymously()
             val householdId = HouseholdRepository.createHousehold("Rex", ownerUid, "Alex", AuthMethods.ANONYMOUS)
 

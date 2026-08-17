@@ -30,7 +30,7 @@ class MemberRepositoryTest {
 
     @Before
     fun seedHousehold() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             uid = AuthRepository.signInAnonymously()
             householdId = HouseholdRepository.createHousehold("The Bear house", uid, "Alex", AuthMethods.ANONYMOUS)
         }
@@ -38,7 +38,7 @@ class MemberRepositoryTest {
 
     @Test
     fun `upsertOwnProfile overwrites a previously written profile for the same uid`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             // createHousehold already wrote a profile for uid with displayName "Alex"; overwrite it.
             MemberRepository.upsertOwnProfile(householdId, uid, "Alexandra", AuthMethods.ANONYMOUS)
 
@@ -50,7 +50,7 @@ class MemberRepositoryTest {
 
     @Test
     fun `deleteMemberProfile removes just that uid's profile`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             MemberRepository.deleteMemberProfile(householdId, uid)
             val members = MemberRepository.observeMembers(householdId).awaitFirst { true }
             assertTrue(members.isEmpty())

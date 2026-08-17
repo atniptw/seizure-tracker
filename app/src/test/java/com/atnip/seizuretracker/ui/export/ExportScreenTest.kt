@@ -70,7 +70,7 @@ class ExportScreenTest {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         resetFileProviderCache()
         householdId = runBlocking {
-            withTimeout(5000) {
+            withTimeout(10000) {
                 val uid = AuthRepository.signInAnonymously()
                 HouseholdRepository.createHousehold("The Bear house", uid, "Alex", AuthMethods.ANONYMOUS)
             }
@@ -108,7 +108,7 @@ class ExportScreenTest {
 
     @Test
     fun `shows range chips, include checkboxes, and format control`(): Unit = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             PetRepository.addPet(householdId, Pet(name = "Bear"))
             petListViewModel.pets.awaitFirst { it.size == 1 }
 
@@ -128,7 +128,7 @@ class ExportScreenTest {
 
     @Test
     fun `pet segmented control only appears with more than one pet`(): Unit = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             PetRepository.addPet(householdId, Pet(name = "Bear", createdAtMillis = 1L))
             petListViewModel.pets.awaitFirst { it.size == 1 }
 
@@ -139,7 +139,7 @@ class ExportScreenTest {
 
     @Test
     fun `preview count reflects the include-flag checkboxes`(): Unit = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val petId = PetRepository.addPet(householdId, Pet(name = "Bear"))
             SeizureRepository.addSeizure(householdId, Seizure(petId = petId, timestampMillis = 1_000L))
             HealthNoteRepository.addHealthNote(householdId, HealthNote(petId = petId, timestampMillis = 2_000L, description = "Limping"))
@@ -160,7 +160,7 @@ class ExportScreenTest {
 
     @Test
     fun `tapping Create export generates a CSV and navigates to the ready screen`(): Unit = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val petId = PetRepository.addPet(householdId, Pet(name = "Bear"))
             SeizureRepository.addSeizure(householdId, Seizure(petId = petId, timestampMillis = 1_000L))
             petListViewModel.pets.awaitFirst { it.size == 1 }

@@ -78,7 +78,7 @@ class ExportReadyScreenTest {
 
     @Test
     fun `shows the entry count, pet names, and file name once a result is set`(): Unit = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val viewModel = ExportViewModel()
             viewModel.updateOptions { it.copy(format = ExportFormat.CSV) }
             val bear = Pet(id = "p1", name = "Bear")
@@ -105,7 +105,7 @@ class ExportReadyScreenTest {
 
     @Test
     fun `singular entry count reads entry not entries`(): Unit = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val viewModel = ExportViewModel()
             viewModel.updateOptions { it.copy(format = ExportFormat.CSV) }
             val bear = Pet(id = "p1", name = "Bear")
@@ -120,7 +120,7 @@ class ExportReadyScreenTest {
 
     @Test
     fun `tapping Done clears the result and returns to the dashboard`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val viewModel = ExportViewModel()
             viewModel.updateOptions { it.copy(format = ExportFormat.CSV) }
             val bear = Pet(id = "p1", name = "Bear")

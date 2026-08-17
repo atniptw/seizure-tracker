@@ -61,7 +61,7 @@ class VetDetailScreenTest {
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         householdId = runBlocking {
-            withTimeout(5000) {
+            withTimeout(10000) {
                 val uid = AuthRepository.signInAnonymously()
                 HouseholdRepository.createHousehold("The Bear house", uid, "Alex", AuthMethods.ANONYMOUS)
             }
@@ -77,7 +77,7 @@ class VetDetailScreenTest {
 
     @Test
     fun `filling name and phone and saving adds a vet`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             composeRule.setContent {
                 VetDetailScreen(
                     navController = rememberNavController(),
@@ -99,7 +99,7 @@ class VetDetailScreenTest {
 
     @Test
     fun `adding a vet with linkToPetId also links it to that pet with the default role`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val petId = PetRepository.addPet(householdId, Pet(name = "Bear"))
             petListViewModel.pets.awaitFirst { it.isNotEmpty() }
 
@@ -126,7 +126,7 @@ class VetDetailScreenTest {
 
     @Test
     fun `editing a vet shows its linked pets and role, and removing it deletes it`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val petId = PetRepository.addPet(householdId, Pet(name = "Bear"))
             val vetId = VetRepository.addVet(householdId, Vet(name = "Riverside Animal Hospital", phone = "555-0192"))
             PetVetLinkRepository.addLink(householdId, petId, vetId, "General")

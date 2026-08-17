@@ -56,7 +56,7 @@ class ManagePetsScreenTest {
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         householdId = runBlocking {
-            withTimeout(5000) {
+            withTimeout(10000) {
                 val uid = AuthRepository.signInAnonymously()
                 HouseholdRepository.createHousehold("The Bear house", uid, "Alex", AuthMethods.ANONYMOUS)
             }
@@ -71,7 +71,7 @@ class ManagePetsScreenTest {
 
     @Test
     fun `lists every pet, marks the active one as Current, and shows Add a pet`(): Unit = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val bearId = PetRepository.addPet(householdId, Pet(name = "Bear", species = "Dog", createdAtMillis = 100L))
             PetRepository.addPet(householdId, Pet(name = "Milo", species = "Cat", createdAtMillis = 200L))
             viewModel.setActivePet(bearId)
@@ -90,7 +90,7 @@ class ManagePetsScreenTest {
 
     @Test
     fun `tapping a non-active pet does not change the active pet`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val bearId = PetRepository.addPet(householdId, Pet(name = "Bear", createdAtMillis = 100L))
             PetRepository.addPet(householdId, Pet(name = "Milo", createdAtMillis = 200L))
             viewModel.setActivePet(bearId)

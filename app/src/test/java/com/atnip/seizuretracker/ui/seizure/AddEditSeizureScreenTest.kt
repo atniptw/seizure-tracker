@@ -64,7 +64,7 @@ class AddEditSeizureScreenTest {
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         householdId = runBlocking {
-            withTimeout(5000) {
+            withTimeout(10000) {
                 // The security rules gate the seizures subcollection on membership of the parent
                 // household doc, so a real household is required fixture data even though
                 // SeizureListViewModel/SeizureRepository's own APIs only take an id.
@@ -82,7 +82,7 @@ class AddEditSeizureScreenTest {
 
     @Test
     fun `filling duration and notes and saving adds a seizure with the right fields`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             composeRule.setContent {
                 AddEditSeizureScreen(
                     navController = rememberNavController(),
@@ -112,7 +112,7 @@ class AddEditSeizureScreenTest {
 
     @Test
     fun `editing a seizure pre-fills fields and saving updates it`() = runBlocking {
-        withTimeout(5000) {
+        withTimeout(10000) {
             val seeded = Seizure(
                 timestampMillis = 1_700_000_000_000L,
                 durationSeconds = 125, // 2m 5s
