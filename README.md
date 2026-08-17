@@ -110,7 +110,7 @@ Two GitHub Actions workflows live in `.github/workflows/`:
   `firebase emulators:exec`, then `./gradlew build` (compile + lint + assemble). See CLAUDE.md's
   "Tests" section for how these suites are organized and how to run them locally.
 - **`release.yml`** — on a pushed tag matching `v*.*.*` (or manually via "Run workflow"),
-  builds a release APK and pushes it to Firebase App Distribution's `testers` group. The
+  builds a release APK and pushes it to Firebase App Distribution's `household` group. The
   release build is currently debug-signed (no release keystore yet) — fine for sideloading
   to testers, not for the Play Store.
 
@@ -137,5 +137,5 @@ gh secret set FIREBASE_APP_ID
 gh secret set FIREBASE_SERVICE_ACCOUNT_JSON < path/to/service-account-key.json
 ```
 
-The `testers` group referenced in `release.yml` must exist in Firebase App Distribution
+The `household` group referenced in `release.yml` must exist in Firebase App Distribution
 (console → App Distribution → Testers & Groups) before the first release run.
