@@ -1,6 +1,6 @@
 # Architecture — Pet Health Diary (v1)
 
-**Status:** draft for discussion · **Last updated:** 2026-08-23
+**Status:** draft for discussion · **Last updated:** 2026-08-29
 **Companion docs:** `product-spec.md` (features, entities, non-goals), `security-privacy.md` (threat model, data handling, admin/access/ownership mechanics)
 
 ## 1. Goals that shape every decision here
@@ -89,7 +89,7 @@ This is the architecture's central requirement, so it's worth being explicit abo
 
 - FlutterFire's Firestore SDK persists a local cache automatically (enabled by default on mobile). Reads come from cache instantly; writes are queued locally and applied optimistically to the UI.
 - The seizure form writes directly to the local cache and returns immediately — the save button doesn't wait on a network round trip. The SDK flushes queued writes to Firestore itself once connectivity returns; there's no custom retry/queue logic to write or maintain.
-- The one thing this pattern doesn't give for free: conflict handling if two people edit the *same* observation offline at the same time. Given the usage pattern (one person logs an observation, edits are rare and almost always by the same logger), last-write-wins (Firestore's default) is an acceptable trade-off for v1 rather than something to engineer around.
+- The one thing this pattern doesn't give for free: conflict handling if two people edit the *same* observation offline at the same time. The access split (`security-privacy.md` §4.1) narrows the editors of any given observation to its logger plus the household's admins, so a genuine concurrent edit is even rarer than before; last-write-wins (Firestore's default) is an acceptable trade-off for v1 rather than something to engineer around.
 - The in-progress seizure timer state lives in local app state (Riverpod), not Firestore, until the observation is saved — no reason to round-trip a running timer through the network layer at all.
 
 ## 5. Household notifications
@@ -114,7 +114,8 @@ Generated **on-device**, not via a Cloud Function, for two reasons: it works off
 - CSV: straightforward serialization of the filtered observation set.
 - PDF: built with the `pdf` and `printing` Dart packages — enough for a clean report with a header, per-observation sections, and an optional trend chart rendered to an image and embedded.
 - Because attachments are local-only (§8), a PDF/CSV export built on one device can only embed the photos/videos actually present on that device — an observation logged (with attachment) on someone else's phone shows up with its text but not its media unless that attachment was shared to this device first. Worth a note in the exported file itself ("N attachments not available on this device") so it doesn't read as data loss.
-- The "log of past exports" is a small local record (export type, date range, timestamp) written to `households/{householdId}/exportLog/{id}` — cheap enough to sync normally, and lets any household member see when an export last happened.
+- Exporting is an **admin-only** action (`security-privacy.md` §4.1) — an export leaves the household as a file. A non-admin who needs the vet report asks an admin, or hands the vet the phone directly (which anyone can do).
+- The "log of past exports" is a small record (export type, date range, timestamp) written to `households/{householdId}/exportLog/{id}` — created only by an admin (the rules match the export gate, `security-privacy.md` §8), readable by any member so anyone can see when an export last happened.
 
 ## 8. Media storage — resolved: local-only, no cloud
 
@@ -137,7 +138,7 @@ What this buys, beyond dodging the Blaze requirement:
 Rough numbers for a handful of households (say, under 20 users, low daily write volume):
 
 - **Firestore, Auth, Hosting, FCM:** comfortably within Firebase's free Spark plan at this scale.
-- **Cloud Functions:** the functions described (membership-cache sync, notification fan-out, vet-deletion cleanup) are low-volume enough to stay within the free tier's invocation/compute allowance.
+- **Cloud Functions:** the functions described (membership-cache sync, notification fan-out, vet-deletion cleanup, and the ones `security-privacy.md` §9 adds — last-durable-admin re-check, join/removal notifications, recursive household delete) are all low-volume triggers, well within the free tier's invocation/compute allowance.
 - **No Cloud Storage, no Blaze plan.** Since media is local-only (§8), there's nothing pushing this project off the Spark plan at all — the whole project can realistically stay fully free indefinitely at this scale, with no billing account on file and no usage to monitor for media specifically.
 - If future features ever do need Blaze (some other metered service), Firebase's pricing is per-use rather than a flat server bill, so cost scales with actual usage rather than jumping to a fixed monthly charge.
 

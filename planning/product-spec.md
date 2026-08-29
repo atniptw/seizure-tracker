@@ -1,6 +1,6 @@
 # Product Spec — Pet Health Diary (v1)
 
-**Status:** draft for discussion · **Last updated:** 2026-08-23
+**Status:** draft for discussion · **Last updated:** 2026-08-29
 **Companion docs:** `architecture.md` (Flutter/tech stack), `security-privacy.md` (threat model, data handling, and how admin/access/ownership actually works).
 
 ## 1. One-liner
@@ -49,8 +49,10 @@ non-admin role is for someone who should only ever add entries. Full capability 
   toggle. Stays unstructured on purpose (see non-goals, §5).
 - **Maintenance medication** — belongs to a pet, not an entry: name/dose/frequency/notes. Distinct
   from a rescue med given during a seizure, which is recorded on that seizure entry instead.
-- **Member profile** — display name + sign-in method per household member, for showing "logged
-  by X" and a member list.
+- **Member profile** — display name, sign-in method, and role (admin / non-admin) per
+  household member, for showing "logged by X", the member list, and gating who can manage
+  the household. The "who logged it" on an entry also decides who may edit or delete it: its
+  logger, or any admin.
 
 ## 4. v1 feature scope
 
@@ -130,6 +132,10 @@ Grouped by usage flow: setup → manage pets/vets/household → log → review �
   professional; it does not diagnose, score severity, or suggest treatment. That framing matters
   both ethically and for how much regulatory weight the app has to carry — keep it in mind when
   writing UI copy for both entry types.
+- **No granular permissions.** The role split is exactly two levels — admin and non-admin —
+  and applies household-wide. No per-pet access, no per-field editing rights, no "can edit
+  vets but not pets" middle tier. If the binary turns out too blunt in real use, that's a
+  post-v1 conversation (`security-privacy.md` §10), not a v1 feature.
 - **The photo/video storage design is not decided in this document.** V1 wants photo/video
   attachments (health notes, pet photos), with one constraint set here because it shapes the
   feature itself: media should not be stored in the cloud the way the rest of the household's

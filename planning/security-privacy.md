@@ -191,6 +191,13 @@ Notes on specific rows:
   sharing with the vet as an owner action. A member who needs the vet report asks an admin.
 - **A member's display name** is set when they join and is not editable by them afterward in
   v1 (it's not in the list above). This is arguably too strict — see §10.
+- **Not a household write, so any member can do it for themselves:** picking the active /
+  default pet, the pet switcher, and setting a medication reminder (which hands off to the
+  phone's alarm app — product-spec §4). These are per-device preferences (`architecture.md`
+  §2, the DataStore layer), not shared state, so the admin split doesn't apply.
+- **Flag-for-vet** is an edit to an observation, so a member can flag or unflag the entries
+  they logged but not someone else's. Fine for v1; the "mention at next vet visit" list is
+  still assembled from every flagged entry regardless of who flagged it.
 - Revealing the join code for the first time and adding the first other member also require
   the acting admin to hold a durable credential (§3.2) — a one-time gate at the
   solo → shared transition, on top of the admin check.
@@ -246,7 +253,10 @@ coordinating in person or by text anyway. Instead:
 
 ### 4.3 Removing a member
 
-- **Admins only** (tightened from today, where any member can remove any member).
+- **Removing someone else: admins only** (tightened from today, where any member can remove
+  any member). **Leaving yourself: anyone, any role** — a member can always delete their own
+  `members/{uid}` doc and pull their own uid from `memberIds`, subject only to the
+  last-admin invariant (§4.4) if they're an admin.
 - Removal = delete the target's `members/{uid}` profile doc **and** remove their uid from
   the household `memberIds` array. Their reads and writes stop on the next rule evaluation.
 - **Their past observations stay.** Those are household data, not the departing member's
@@ -395,11 +405,12 @@ For `firestore.rules` and `architecture.md` §6 to be updated to match §§3–7
    enforce it.
 2. **`members/{memberUid}` — delete restricted to admins.** Today: any member may delete any
    member doc. Needed: only an admin (or the uid itself, for self-leave).
-3. **`households/{id}` — writes restricted to admins, except the join clause.** Today the
+3. **`households/{id}` — writes restricted to admins, except join and self-leave.** Today the
    update rule lets any member write the doc. Needed: writing the household doc (rename via
-   the `name` field, `memberIds` changes, etc.) requires the caller be an admin. The one
-   exception that stays open to any signed-in user is the existing "a new member adds only
-   themselves to `memberIds`" join clause. Delete stays `if false` (item 9).
+   the `name` field, arbitrary `memberIds` changes, etc.) requires the caller be an admin.
+   Two exceptions stay open to any signed-in user: the existing "a new member adds **only
+   themselves** to `memberIds`" join clause, and its mirror — a member removes **only their
+   own** uid from `memberIds` (self-leave, §4.3). Delete stays `if false` (item 9).
 4. **Config/content subcollections — read by any member, write by admins.** `pets`, the
    per-pet `medications`, `vets`, and `petVetLinks` (whatever the Flutter model calls them)
    change from today's `read, write: if member` to `read: if member; write: if admin`.
@@ -432,7 +443,8 @@ For `firestore.rules` and `architecture.md` §6 to be updated to match §§3–7
 
 ## 9. Cloud Functions this document implies
 
-Adding to the list in `architecture.md` §9:
+Adding to the Cloud Functions named across `architecture.md` (§3 membership-cache sync and
+vet-deletion cleanup, §5 notification fan-out):
 
 - **`memberIds` cache sync** — already planned; trigger on `members` writes.
 - **Last-durable-admin invariant re-check** — trigger on `members` writes; flag or repair a
