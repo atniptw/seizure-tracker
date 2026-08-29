@@ -6,16 +6,17 @@ today, **(new)** = idea for the revamp, not yet built.
 
 ## Context for Claude Design
 
-Android app (Kotlin + Jetpack Compose) for logging a dog's — soon multiple pets' —
-seizures and health events, sharing a household via Firebase, and exporting a report for
-the vet. Read the repo's `app/src/main/java/.../ui/theme/` (Color.kt, Theme.kt, Type.kt)
+Android app (Kotlin + Jetpack Compose) for logging a household's pets' seizures and health
+events, sharing a household via Firebase, and exporting a report for the vet. Read the
+repo's `app/src/main/java/.../ui/theme/` (Color.kt, Theme.kt, Type.kt)
 to pick up the existing Material 3 theme before designing new screens, so mockups stay
 on-brand rather than generic.
 
-## Two roles: admin and member
+## Two roles: admin and member  *(new — not in the app today)*
 
-Every screen below has to work for two kinds of user (see `planning/security-privacy.md`
-§4.1 for the full breakdown):
+The role split below is **not built yet** — the current app has no roles and every member can
+do everything. It's a design target for this revamp. Every screen below has to work for two
+kinds of user (see `planning/security-privacy.md` §4.1 for the full breakdown):
 
 - **Admin** — full control: manages pets, medications, vets, the member roster, the join
   code, and exports. The household creator, and anyone they promote.

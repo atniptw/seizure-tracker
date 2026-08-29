@@ -3,6 +3,10 @@
 **Status:** draft for discussion · **Last updated:** 2026-08-29
 **Companion docs:** `architecture.md` (Flutter/tech stack), `security-privacy.md` (threat model, data handling, and how admin/access/ownership actually works).
 
+> **Target, not current.** This spec describes the intended product. The shipped Kotlin app
+> already does multi-pet / health notes / vets, but has **no admin/member roles** yet (every
+> member can do everything) and no Apple sign-in. See `architecture.md §0` for the full gap list.
+
 ## 1. One-liner
 
 A cross-platform app for households to log a pet's seizures and other health events, keep

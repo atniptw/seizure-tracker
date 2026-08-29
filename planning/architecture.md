@@ -3,6 +3,28 @@
 **Status:** draft for discussion · **Last updated:** 2026-08-29
 **Companion docs:** `product-spec.md` (features, entities, non-goals), `security-privacy.md` (threat model, data handling, admin/access/ownership mechanics)
 
+## 0. This document is the target, not the shipped app
+
+This describes where the app is headed, not what runs today. The shipped app is **Kotlin +
+Jetpack Compose** (not Flutter) and already does the multi-pet / vets / health-notes
+redesign, but on a different Firestore shape. Things below that are **not yet built**:
+
+- **Flutter client.** Today it's native Android/Kotlin; the Flutter port is a separate plan.
+- **`observations` collection.** Today seizures and health notes are two collections
+  (`seizures`, `healthNotes`), not one polymorphic collection.
+- **Admin/member roles.** Today there are no roles — every member can write everything, and
+  any member can remove any member. `security-privacy.md` §8 lists the rule changes this needs.
+- **`memberIds` cache + `members` subcollection as source of truth.** Today the household
+  doc's `members` array is the sole source of truth for access (`firestore.rules`); the
+  `members/{uid}` subcollection holds display-name/auth-method metadata only, and there is
+  no Cloud Function keeping anything in sync.
+- **Cloud Functions.** None are deployed. Every Function named in this doc and in
+  `security-privacy.md` §9 is proposed, not live.
+- **`households/{id}/private/config`.** Today the plaintext join code is a `code` field on
+  the household doc; the admin-only config doc does not exist yet.
+- **Medications as a subcollection with `active`/`endDate`.** Today they're an embedded
+  array on the pet doc with no lifecycle fields; discontinuing one deletes it.
+
 ## 1. Goals that shape every decision here
 
 Pulled straight from the product spec and the project's own constraints, because they rule out a lot of otherwise-reasonable architectures:
@@ -39,7 +61,7 @@ households/{householdId}
 households/{householdId}/private/config
   joinCode                                     # admin-only read/write (security-privacy.md §4.2)
 households/{householdId}/members/{uid}
-  displayName, role: "admin" | "member", joinedAt, signInMethod
+  displayName, role: "admin" | "member", joinedAt, authMethod
   # source of truth for household membership; only an admin may write another member's `role`
 households/{householdId}/pets/{petId}
   name, species, breed, weight, birthDate, diagnosisDate, photoRef, archived: bool
@@ -65,6 +87,12 @@ households/{householdId}/observations/{observationId}
     # seizure: duration, seizureType, symptoms[], preSeizureSigns[], triggers,
     #   recoveryTime, recoveryBehavior, recoveryNotes, rescueMedGiven, rescueMedDetails, notes
     # note: description, notes
+
+codeIndex/{code}
+  householdId, householdName                   # id + display name only (security-privacy.md §4.2)
+  # top-level, not under households/ — a joiner resolves a code to a household id before
+  #   they're a member and can read the household doc. Carries the household's display name
+  #   for the join preview and nothing else: no pet names, no vet info, no health data.
 ```
 
 **Single polymorphic `observations` collection, envelope + details:** every logged thing — a seizure, a general note, and whatever gets added later (medication given, vet visit, weight check) — is something a household member observed and recorded about the pet. Rather than force each into its own collection, they all live in `observations`, discriminated by `type`. At this data volume there's no reason to give seizures special-case treatment; a single unified per-pet timeline is also simpler to query, notify on (§5), and export (§7) than merging multiple collections would be. `seizure` and `note` are the first two `type`s; more get added as new observation types come up, without restructuring anything.

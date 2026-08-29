@@ -1,7 +1,9 @@
 # Seizure Tracker
 
-A small Android app for logging your dog's seizures — what happened, how long it lasted,
-recovery time, medications given — and sharing a clean PDF/CSV report with your vet. Multiple
+A small Android app for logging a household's pets' health events — seizures in detail (what
+happened, how long it lasted, recovery time, rescue meds given), plus lightweight health
+notes for anything else worth telling the vet — and sharing a clean PDF/CSV report. It also
+keeps each pet's profile, maintenance medications, and a shared vet directory. Multiple
 people (you, a partner, a petsitter) can log from their own phones; everything syncs through
 a free Firebase backend and also works offline (entries sync once you're back online).
 
@@ -62,25 +64,31 @@ send it to them directly to sideload.
 
 ## 3. First run
 
-- The first person opens the app, taps **Set up a new dog**, enters the dog's name and their
-  own name. This creates the shared household and generates a 6-character join code.
+- The first person opens the app, taps **Set up a household**, enters a household name and
+  their own name. This creates the shared household and generates a 6-character join code.
+  Add pets afterward from **Manage pets**.
 - Anyone else taps **Join with a household code**, enters that code and their own name. Their
-  device is now linked to the same dog's data.
-- The join code is always visible on the Dashboard and on the Dog profile screen, so you can
-  read it out or copy it to send to someone.
+  device is now linked to the same household's data.
+- The join code is shown on the **Household** screen (copy or share it from there) so you can
+  pass it to someone.
 
 ## What it does
 
 - **Log a seizure**: date/time, duration, seizure type, a symptom checklist, signs before
-  onset, possible triggers, recovery time and behavior, whether a rescue medication was given
+  onset, possible triggers, recovery time and notes, whether a rescue medication was given
   (and details), free-text notes, and who logged it.
+- **Log a health note**: a lightweight entry for anything else worth telling the vet — free
+  text, when it started, notes, an optional photo, and a flag-for-vet toggle.
 - **History**: every past entry, most recent first, tap through to view or edit.
-- **Dog profile**: breed, weight, vet contact info, and a list of current maintenance
-  medications (name/dose/frequency) — kept separate from the "rescue med given during a
-  seizure" field on each entry.
-- **Export for vet**: pick Last 30 days / Last 90 days / All time, then share a formatted PDF
-  or a CSV (opens fine in Excel/Sheets) straight from your phone's share sheet — text, email,
-  whatever's easiest.
+- **Pet profiles**: one per pet (name, species, breed, weight, birth date, photo) with that
+  pet's list of maintenance medications (name/dose/frequency) — kept separate from the
+  "rescue med given during a seizure" field on each entry.
+- **Vets**: one shared vet directory per household, with each vet linked to specific pets and
+  a role label (general / emergency / neuro / other).
+- **Export for vet**: pick which pet, a date range (last 30 / 90 days, all time, or a custom
+  range), and whether to include health notes, then share a formatted PDF or a CSV (opens
+  fine in Excel/Sheets) straight from your phone's share sheet — text, email, whatever's
+  easiest.
 - **Offline-friendly**: Firestore caches data locally, so logging works without signal; it
   syncs automatically once you're back online.
 
@@ -89,11 +97,17 @@ send it to them directly to sideload.
 - **Medication reminders/notifications** — the current-medications list is there for
   reference and for the exported report, but there's no scheduled reminder yet. Could be
   added later with WorkManager if useful.
-- **Video/photo attachments** — not included, to keep the free Firebase tier simple (video
-  would need Firebase Storage, which has its own quota).
-- **Removing a household member** — anyone with the code can join, but there's currently no
-  in-app way to revoke a device's access. If that's ever needed, it'd mean editing the
-  `members` list directly in the Firebase console for now.
+- **Cloud-stored attachments** — a health note or pet profile can carry one photo, but it's
+  kept as a local device reference, not uploaded to Firebase Storage (which needs a billing
+  account). A photo therefore isn't automatically on other members' devices. Video isn't
+  supported at all.
+- **Roles / permissions** — there's no admin vs. member distinction yet. Any member can edit
+  anything and remove any other member. The `planning/` docs describe a role split as a
+  future change.
+- **Rotating or revoking the join code** — removing a member (**Household** screen) drops
+  their access immediately, but the join code itself can't be regenerated in-app yet, so a
+  removed member who kept the code could re-join. Changing it means editing the `codeIndex`
+  and household docs in the Firebase console for now.
 
 ## Costs
 

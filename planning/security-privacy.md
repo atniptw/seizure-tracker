@@ -68,7 +68,7 @@ and the residual risk it accepts, so a future revisit has the reasoning in hand.
 | Actor | Goal | What stops it |
 |---|---|---|
 | A stranger with no code | Read a household's data | Security Rules: reads require `uid in memberIds`; `codeIndex` is get-by-exact-id only, never listable, and holds no health data |
-| A stranger who guessed/brute-forced a code | Join a household | 31⁶ ≈ 887M codes, get-by-id only (no query), realistically requires online guessing against Firebase; rate-limited by Firebase and by the code being useless without also being unremoved. Residual risk accepted at this scale — see §4.2 |
+| A stranger who guessed/brute-forced a code | Join a household | 32⁶ ≈ 1.07B codes, get-by-id only (no query), realistically requires online guessing against Firebase; rate-limited by Firebase and by the code being useless without also being unremoved. Residual risk accepted at this scale — see §4.2 |
 | A **removed** former member | Keep reading, or re-join | Removal drops their uid from `memberIds` (reads/writes stop immediately) **and** an admin rotates the code (§4.2). Between removal and rotation, a removed member who kept the code could re-add themselves — accepted, see §4.3 |
 | A **malicious current member** | Vandalize data, exfiltrate | Largely out of scope — a member is trusted to read everything and log entries (§2.2). Admin-only writes (§4.1) limit an ordinary member to damaging the timeline via bad log entries and only their own edits/deletes; a *malicious admin* is fully out of scope. Mitigations are social (don't add people you don't trust; grant admin sparingly) plus history being recoverable only via prior exports |
 | Someone holding a member's **unlocked phone** | Read the local cache, log entries | Optional device-level app lock (§6). A determined attacker with the unlocked device or filesystem access is out of scope |
@@ -205,7 +205,8 @@ Notes on specific rows:
 ### 4.2 Joining
 
 **Mechanism: a rotating, household-level join code.** Kept from the current app
-(`util/HouseholdCode.kt`): 6 chars from a 31-char ambiguity-free alphabet, resolved via the
+(`util/HouseholdCode.kt`): 6 chars from a 32-char ambiguity-free alphabet (A–Z and 2–9,
+minus `I` and `O`), resolved via the
 top-level `codeIndex/{code}` document to a household id, because a non-member can't query
 `/households` under the rules.
 
@@ -233,9 +234,10 @@ Changes from today:
 - **Preview before confirming (new, design brief).** To show "You're about to join *The
   Bear & Milo house*" before the joiner commits, the `codeIndex/{code}` doc carries the
   household's **display name** in addition to the id — nothing else, no pet names, no health
-  data. This is a conscious, minimal relaxation of `architecture.md` §3's "holds nothing but
-  the mapping": a household nickname is low-sensitivity, and anyone holding the code was
-  given it on purpose. Pet names and photos are *not* in the index; a fuller preview (pets)
+  data. This is a conscious, minimal relaxation of today's index doc, which holds the
+  household id and nothing else (`firestore.rules`): a household nickname is low-sensitivity,
+  and anyone holding the code was given it on purpose. `architecture.md` §3 documents the
+  id + display-name shape as the target. Pet names and photos are *not* in the index; a fuller preview (pets)
   only renders after the join write lands, with a "this isn't my household — leave" escape
   hatch.
 
