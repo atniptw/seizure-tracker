@@ -8,6 +8,7 @@
 `product-spec.md` and `architecture.md` both defer a cluster of questions to this doc:
 
 - How someone joins a household, and who controls that.
+- What a plain member can do vs. an admin (member = log-and-view; admin = everything else).
 - How admin status is held, granted, and transferred.
 - Account durability — what happens to a membership when the identity behind it goes away,
   especially the "continue without an account" case.
@@ -42,11 +43,18 @@ and the residual risk it accepts, so a future revisit has the reasoning in hand.
 
 ### 2.2 Trust boundaries
 
-- **Inside a household: full trust.** Every member — admin or not, Google or anonymous —
-  can read and write every pet, vet, and observation in the household. There is no
-  data-level hierarchy (product-spec §2). We are not defending a member against another
-  member; a petsitter you brought in can see everything and could delete an entry. The
-  admin/member split is only about *managing the roster*, not about data.
+- **Inside a household: read + log is fully trusted; managing is admin-only.** Every member
+  — admin or not, Google or anonymous — can *read* everything in the household (pets, vets,
+  medications, the whole observation history, the dashboard) and can *log* new observations.
+  Beyond that there is a deliberate split (§4.1): only admins can change pet profiles,
+  medications, vets, household settings, the member roster, or export a report, and a
+  non-admin can edit or delete only the entries they logged themselves. This is a
+  management-surface hierarchy, **not** a visibility one — no data is hidden from a member.
+  We are still not meaningfully defending a member against a co-member with bad intent (a
+  non-admin can still corrupt the timeline by mis-logging, and the restrictions are only as
+  strong as the rules in §8); the split is about preventing *accidental* damage to shared
+  configuration by someone who was only ever meant to log entries, and about matching
+  product-spec §2's persona expectations.
 - **Between households: zero trust.** A uid in household A must never be able to read or
   write household B, or enumerate households, pets, or codes. This is the main job of
   `firestore.rules`.
@@ -62,7 +70,7 @@ and the residual risk it accepts, so a future revisit has the reasoning in hand.
 | A stranger with no code | Read a household's data | Security Rules: reads require `uid in memberIds`; `codeIndex` is get-by-exact-id only, never listable, and holds no health data |
 | A stranger who guessed/brute-forced a code | Join a household | 31⁶ ≈ 887M codes, get-by-id only (no query), realistically requires online guessing against Firebase; rate-limited by Firebase and by the code being useless without also being unremoved. Residual risk accepted at this scale — see §4.2 |
 | A **removed** former member | Keep reading, or re-join | Removal drops their uid from `memberIds` (reads/writes stop immediately) **and** an admin rotates the code (§4.2). Between removal and rotation, a removed member who kept the code could re-add themselves — accepted, see §4.3 |
-| A **malicious current member** | Vandalize data, exfiltrate | Out of scope — full trust inside the household (§2.2). Mitigations are social (don't add people you don't trust) plus history being recoverable only via prior exports |
+| A **malicious current member** | Vandalize data, exfiltrate | Largely out of scope — a member is trusted to read everything and log entries (§2.2). Admin-only writes (§4.1) limit an ordinary member to damaging the timeline via bad log entries and only their own edits/deletes; a *malicious admin* is fully out of scope. Mitigations are social (don't add people you don't trust; grant admin sparingly) plus history being recoverable only via prior exports |
 | Someone holding a member's **unlocked phone** | Read the local cache, log entries | Optional device-level app lock (§6). A determined attacker with the unlocked device or filesystem access is out of scope |
 | A **network attacker** | Intercept traffic | TLS on every Firebase connection; no app-level plaintext |
 | **Google / Firebase** as the platform | Read stored data | In scope as an acknowledged limitation: the structured data is encrypted at rest with Google-managed keys, not end-to-end. This is why media is deliberately kept out of the cloud entirely (§5.4) — for the one asset class where "the provider genuinely cannot see it" was worth the cost |
@@ -151,23 +159,41 @@ Two roles, stored as `role: "admin" | "member"` on `households/{id}/members/{uid
 the household doc is the Function-maintained access-check cache, and today's app calls that
 array `members`). A household can have **more than one admin** (product-spec §2).
 
+A **member is log-and-view only**; everything that manages the household is admin-only
+(product-spec §2). A partner or family member who co-manages pets should be made an admin;
+"member" is for the petsitter / occasional logger and anyone who should only ever add
+entries.
+
 | Capability | Admin | Member |
 |---|---|---|
-| Read/write all pets, vets, observations | ✅ | ✅ |
+| **Read** everything — pets, vets, medications, full history, dashboard | ✅ | ✅ |
+| **Log** a new observation (seizure / health note) | ✅ | ✅ |
+| Edit / delete an observation **they logged themselves** | ✅ | ✅ |
+| Edit / delete an observation **someone else logged** | ✅ | ❌ |
+| Add / edit / archive pets; edit a pet profile | ✅ | ❌ |
+| Add / edit / discontinue medications | ✅ | ❌ |
+| Add / edit vets and pet–vet links | ✅ | ❌ |
+| Rename the household or a pet | ✅ | ❌ |
+| Export a report (PDF / CSV) | ✅ | ❌ |
 | View the member list | ✅ | ✅ |
-| See / copy / show the join code | ✅ | ✅ |
+| See / copy / show the join code | ✅ | ❌ |
 | Rotate the join code | ✅ | ❌ |
-| Remove a member | ✅ | ❌ |
-| Promote a member to admin / demote an admin | ✅ | ❌ |
-| Rename the household or a pet | ✅ | ✅ |
+| Add / remove a member; promote / demote an admin | ✅ | ❌ |
 | Delete the household | ✅ (confirmation-gated; members notified first — §7) | ❌ |
 
-Members seeing the join code is intentional — that's how "read it out to your partner"
-works today and there's no threat model reason to hide it from someone who's already inside.
+Notes on specific rows:
 
-Revealing the join code for the first time and adding the first other member require the
-acting admin to hold a durable credential (§3.2). That's a one-time gate at the
-solo → shared transition, not a check on every invite afterward.
+- **A member can't see the join code.** Combined with the roster being admin-only, this
+  means only an admin can bring anyone new in. Enforcing this properly needs the `code`
+  field moved off the household doc (which every member reads) into an admin-only location —
+  see §4.2 and §8; a UI-only hide is a weaker fallback.
+- **A member can't export.** An export leaves the household as a file; product-spec §4 frames
+  sharing with the vet as an owner action. A member who needs the vet report asks an admin.
+- **A member's display name** is set when they join and is not editable by them afterward in
+  v1 (it's not in the list above). This is arguably too strict — see §10.
+- Revealing the join code for the first time and adding the first other member also require
+  the acting admin to hold a durable credential (§3.2) — a one-time gate at the
+  solo → shared transition, on top of the admin check.
 
 ### 4.2 Joining
 
@@ -178,13 +204,20 @@ top-level `codeIndex/{code}` document to a household id, because a non-member ca
 
 Changes from today:
 
+- **The code lives where only admins can read it.** Today it's a `code` field on the
+  household doc, which every member reads. To make "a member can't see the join code" (§4.1)
+  real rather than a UI nicety, the current code moves to an **admin-only location** — a
+  `households/{id}/private/config` doc whose rules grant read only to admins, or an
+  equivalent. The household doc keeps no plaintext code. `codeIndex/{code}` is unchanged (it
+  has to stay get-by-id readable for the join to work). Without this move, a non-admin member
+  can still read the code by talking to Firestore directly; with it, they genuinely can't.
 - **The code doesn't exist until the household goes multi-person.** A solo anonymous creator
   has no join code at all until they link a durable credential and choose to invite someone
   (§3.2). Every household that already has more than one member always has a live code.
 - **The code is rotatable.** An admin can regenerate it; the app writes the new
-  `codeIndex/{newCode}` doc, points the household's `code` field at it, and **deletes the
-  old `codeIndex` doc** so the previous code stops resolving. This is the primary lever for
-  "an admin controls who's in": control who you give the current code to, and rotate it when
+  `codeIndex/{newCode}` doc, updates the admin-only config doc, and **deletes the old
+  `codeIndex` doc** so the previous code stops resolving. This is the primary lever for "an
+  admin controls who's in": control who you give the current code to, and rotate it when
   someone should no longer be able to join (after removing a petsitter, or if you think it
   leaked).
 - **QR code (new, design brief).** The QR encodes the same code (or a deep link containing
@@ -333,7 +366,7 @@ re-auth" — Flutter `local_auth`):
 
 | Action | What happens | Notes |
 |---|---|---|
-| Delete an **observation** | Hard delete of the Firestore doc | Last-write-wins, no soft-delete/tombstone in v1 (`architecture.md` §4). Recoverable only from a prior export. Any local-only attachment is a separate manual file delete on whichever devices hold it |
+| Delete an **observation** | Hard delete of the Firestore doc | Only the member who logged it, or an admin (§4.1). Last-write-wins, no soft-delete/tombstone in v1 (`architecture.md` §4). Recoverable only from a prior export. Any local-only attachment is a separate manual file delete on whichever devices hold it |
 | Discontinue a **medication** | `active: false` + `endDate` set — **not** a delete | Deliberate: preserves history a vet may ask about (`architecture.md` §3) |
 | Remove a **member** | Profile doc + `members` entry deleted; their observations remain | §4.3. Prompt to rotate the code |
 | Delete a **household** | Admin-initiated, confirmation-gated; a **Cloud Function** recursively deletes all subcollections (pets, vets, observations, members, exportLog) and the `codeIndex` doc | Firestore never cascades, and a client can't be trusted to finish a multi-hundred-doc delete. Client rule stays `allow delete: if false` on the household doc — only the Function (Admin SDK) does it. Members are notified before it happens |
@@ -347,38 +380,55 @@ the household is torn down.
 
 For `firestore.rules` and `architecture.md` §6 to be updated to match §§3–7:
 
-1. **`members/{memberUid}` — role writes.** Today: create/update allowed only if
-   `request.auth.uid == memberUid`. Needed: a member may still write **their own**
-   `displayName` / `authMethod` / `lastActiveAt`; but the `role` field may be written by
-   **any current admin** (an admin is a member whose own `members` doc has
-   `role == "admin"`). Requires a `get()` of the caller's own member doc. The last-durable-
-   admin invariant (§4.4) is *not* expressed here — client + Function enforce it.
+1. **`members/{memberUid}` — role and profile writes.** Today: create/update allowed only if
+   `request.auth.uid == memberUid`. Needed:
+   - `create` — still `request.auth.uid == memberUid` (the member writes their own doc at
+     join, setting `displayName` and `authMethod`).
+   - `update` of the caller's **own** doc — allowed for `lastActiveAt` (§4.5) and
+     `authMethod` (refreshed on account link, §3.3). `displayName` is **not** member-editable
+     after join in v1 (§4.1 note, §10). Whether the rule enforces the field-level restriction
+     or just trusts the client on `displayName` is an implementation call — the trust model
+     (§2.2) tolerates the loose version.
+   - `role` — writable only by **an admin** (the caller's own `members/{uid}` doc has
+     `role == "admin"`, via `get()`), never by the target themselves.
+   The last-durable-admin invariant (§4.4) is *not* expressed here — client + Function
+   enforce it.
 2. **`members/{memberUid}` — delete restricted to admins.** Today: any member may delete any
    member doc. Needed: only an admin (or the uid itself, for self-leave).
-3. **`households/{id}` — `memberIds` array shrink restricted to admins.** Today the update
-   rule allows any member to write the doc (and the array is still called `members`). Needed:
-   removing a uid from `memberIds` (array size decreases, or a uid other than the caller's
-   disappears) requires the caller be an admin. The existing "a new member adds only
-   themselves" join clause stays.
-4. **`codeIndex/{code}` — update & delete by household members.** Today: `if false`. Needed:
-   a member of the household the code points to may delete it (rotation) and create the
-   replacement. Consider restricting to admins to match §4.1.
-5. **`codeIndex/{code}` — document shape.** Now `{ householdId, householdName }` (§4.2
-   preview). `get` stays "any signed-in by exact id"; `list` stays `false`.
-6. **`codeIndex/{code}` create — require a non-anonymous caller.** Belt-and-braces for the
-   §3.2 gate: `allow create` also asserts the caller is a durable identity — check the
-   `request.auth.token` for a non-anonymous provider (via `firebase.identities` /
-   `firebase.sign_in_provider`, or simply `token.email != null` for Google/Apple); the exact
-   claim is a rules-implementation detail, and note that `sign_in_provider` can lag a
-   `linkWithCredential` until the session re-authenticates. Effect: a join code can't be
-   published by an identity that could later strand the household. The client enforces the
-   same thing earlier and more gently (the link prompt); this just stops a hand-crafted
-   request from skipping it.
-7. **`households/{id}` delete stays `if false`** — household teardown is Cloud-Function-only
+3. **`households/{id}` — writes restricted to admins, except the join clause.** Today the
+   update rule lets any member write the doc. Needed: writing the household doc (rename via
+   the `name` field, `memberIds` changes, etc.) requires the caller be an admin. The one
+   exception that stays open to any signed-in user is the existing "a new member adds only
+   themselves to `memberIds`" join clause. Delete stays `if false` (item 9).
+4. **Config/content subcollections — read by any member, write by admins.** `pets`, the
+   per-pet `medications`, `vets`, and `petVetLinks` (whatever the Flutter model calls them)
+   change from today's `read, write: if member` to `read: if member; write: if admin`.
+   "Admin" = the caller's own `members/{uid}` doc has `role == "admin"`, via `get()`.
+5. **`observations` — read + create by any member; update/delete by the author or an admin.**
+   The new polymorphic collection (replacing today's `seizures` / `healthNotes`):
+   `read: if member`, `create: if member` (and `request.resource.data.loggedByUid ==
+   request.auth.uid` so a member can't forge authorship), `update, delete: if admin ||
+   resource.data.loggedByUid == request.auth.uid`. This is what makes "a member can edit or
+   delete only their own entries" (§4.1) real.
+6. **`households/{id}/private/config` — new doc, admin-only read and write.** Holds the
+   current plaintext join code (moved off the household doc so a non-admin member can't read
+   it — §4.2). `allow read, write: if admin`.
+7. **`codeIndex/{code}` — create/update/delete by admins of the target household.** Today:
+   `if false` for update/delete, any signed-in for create. Needed: an **admin** of the
+   household the code points to may create the replacement and delete the old doc (rotation).
+   `get` stays "any signed-in by exact id" (required for the join); `list` stays `false`.
+8. **`codeIndex/{code}` — document shape + non-anonymous create.** Shape is now
+   `{ householdId, householdName }` (§4.2 preview — `householdName` only, no pet data).
+   `create` also asserts the caller is a durable identity — check `request.auth.token` for a
+   non-anonymous provider (`firebase.identities` / `firebase.sign_in_provider`, or simply
+   `token.email != null`); exact claim is an implementation detail, and note
+   `sign_in_provider` can lag a `linkWithCredential` until re-auth. Belt-and-braces for the
+   §3.2 gate so a hand-crafted request can't publish a code from a strandable identity.
+9. **`households/{id}` delete stays `if false`** — household teardown is Cloud-Function-only
    (§7).
-8. New polymorphic **`observations`** collection (replacing today's separate `seizures` /
-   `healthNotes`) keeps the same member-gated `read, write` rule those have now
-   (`architecture.md` §3).
+10. **`households/{id}/exportLog/{id}` — create by admins only.** Export is an admin action
+    (§4.1); the log of past exports (`architecture.md` §7) is written only when an admin
+    exports. `read: if member` so anyone can see when the last export happened.
 
 ## 9. Cloud Functions this document implies
 
@@ -400,6 +450,14 @@ Adding to the list in `architecture.md` §9:
   Functions above and a small "pending invites" UI. Not v1.
 - **Self-serve "scrub my name from history"** for a departed member (§7). Manual maintainer
   action in v1; revisit if anyone asks.
+- **Can a member edit their own display name?** §4.1 currently says no (set at join, frozen
+  after). "Can't fix a typo in your own name" is weak UX; the counter-argument is that a
+  name change rewrites how past entries are attributed. Cheap to allow — decide during the
+  member/settings screen design. If allowed, it's a `displayName`-only self-update on the
+  member doc (§8 item 1).
+- **Should a member be able to export?** §4.1 says no. If the petsitter genuinely needs to
+  hand a vet a report without an admin around, this may be too strict — revisit with real
+  usage. Read-only export doesn't change any data, so loosening it later is low-risk.
 - **Exact UX of the force-link-before-invite gate** (§3.2): where the link prompt sits in
   the invite flow, what the solo-creator nudge looks like, and whether "share code" and "add
   member" are one action or two. For the Flutter onboarding design pass.

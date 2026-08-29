@@ -35,9 +35,12 @@ Firestore is document/collection-based, not relational, so the spec's entities m
 households/{householdId}
   name, createdAt, memberIds: [uid, uid, ...]
   # memberIds is a derived cache — see denormalization note below
+  # no plaintext join code here — it's in private/config so non-admins can't read it
+households/{householdId}/private/config
+  joinCode                                     # admin-only read/write (security-privacy.md §4.2)
 households/{householdId}/members/{uid}
   displayName, role: "admin" | "member", joinedAt, signInMethod
-  # source of truth for household membership
+  # source of truth for household membership; only an admin may write another member's `role`
 households/{householdId}/pets/{petId}
   name, species, breed, weight, birthDate, diagnosisDate, photoRef, archived: bool
   linkedVets: [{ vetId, vetName, role }, ...]
@@ -97,9 +100,10 @@ Deferred — not designed yet. The spec calls for "saving notifies the rest of t
 
 Enforced via Firestore Security Rules rather than a custom backend layer:
 
-- A user can read/write anything under `households/{householdId}/**` only if their uid is in that household's `memberIds`.
-- Only members with `role: "admin"` on their `members/{uid}` doc can write to the `members` subcollection (add/remove members) or change another member's role.
-- Full mechanics of *how* someone gets added to a household, admin transfer, and account durability are out of scope for this document per the product spec — that belongs in `security-privacy.md`. This section only covers how the rules enforce whatever that process decides.
+- A user can **read** anything under `households/{householdId}/**` only if their uid is in that household's `memberIds`.
+- **Writes are role-split** (see `security-privacy.md` §4.1 for the product rationale, §8 for the per-collection rules): any member may create an `observations` doc and edit/delete one where `loggedByUid` is their own uid; everything else — `pets`, `medications`, `vets`, `petVetLinks`, household settings, the `members` subcollection and roles, the join code, `exportLog` — is writable only by a member with `role: "admin"` on their `members/{uid}` doc.
+- The plaintext join code lives in an **admin-only** `households/{id}/private/config` doc, not on the household doc, so a non-admin member can't read it.
+- Full mechanics of *how* someone gets added to a household, admin transfer, and account durability are specified in `security-privacy.md` (§§3–4). This section only covers how the rules enforce that.
 
 Security Rules are the entire access-control layer — no server-side authorization code to write or audit beyond the rules file itself, which fits the "no vet-facing backend surface, no backend to maintain" goal directly.
 

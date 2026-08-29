@@ -13,10 +13,17 @@ mid-seizure never has to think.
 
 | Persona | Role | Needs |
 |---|---|---|
-| Admin | Can add or remove members; a household can have more than one | Fast logging, full history, exports, control over who's in |
-| Member (partner, family member) | Full member, logs from their own device | Same logging/data access as an admin — no hierarchy on the data itself |
-| Petsitter / occasional logger | Temporary member, sees the whole household even if only there for one pet | Easy to bring in for a stretch, easy to take back out |
+| Admin | Manages the household — pets, vets, medications, members, exports, the join code; a household can have more than one admin | Fast logging, full history, exports, full control over the household's setup and who's in |
+| Member (partner, family member who co-manages) | Should be an **admin** — see above | — |
+| Member / petsitter / occasional logger | Non-admin: reads the whole household and logs entries (and edits/deletes their own), but can't change pets/vets/medications, household settings, the roster, the join code, or export | Easy to bring in for a stretch, easy to take back out; can log without being able to break the household's setup |
 | Vet (indirect) | Never opens the app | Receives a report (PDF/CSV, or later a shared link) |
+
+**A non-admin member is log-and-view only.** They see everything (no data is hidden) and can
+log observations, including fixing or deleting ones they logged — but every management
+action (pet profiles, medications, vets, renaming, member roster, join code, export) is
+admin-only. A partner or family member who co-manages the pets should be made an admin; the
+non-admin role is for someone who should only ever add entries. Full capability breakdown in
+`security-privacy.md` §4.1.
 
 ## 3. Core entities
 
@@ -26,8 +33,9 @@ mid-seizure never has to think.
   every pet they own, and anyone added to it (including a petsitter only there for one animal)
   sees all of them. That's intentional — someone who's around the house may notice something
   worth a quick health note on a pet they weren't technically there for, and there's no benefit
-  to hiding that pet from them. Has one or more admins (see §2). Access and ownership mechanics
-  are specified in `security-privacy.md`.
+  to hiding that pet from them. *Seeing* everything is universal; *changing* the household's
+  setup (pets, vets, medications, members) is admin-only (see §2). Has one or more admins.
+  Access and ownership mechanics are specified in `security-privacy.md`.
 - **Pet** — belongs to a household: name, species (dog/cat/other), breed, weight, birth date,
   photo, and its own list of maintenance medications. A household can have any number of pets.
 - **Vet** — a shared, reusable contact per household (not per pet): name, phone, notes.
@@ -52,10 +60,11 @@ Grouped by usage flow: setup → manage pets/vets/household → log → review �
 - Sign in with Google, Apple, or continue without an account (for someone who'd rather not
   attach one, e.g. a petsitter).
 - Create a household (pet name + species + your name), becoming its first admin, or get added
-  to an existing one by an admin. The mechanism for adding someone is specified in
-  `security-privacy.md`.
+  to an existing one by an admin. You can create and use a household solo without an account,
+  but must add Google/Apple before inviting anyone (`security-privacy.md` §3.2). The
+  mechanism for adding someone is specified in `security-privacy.md`.
 
-**Manage pets**
+**Manage pets** *(editing is admin-only; everyone can view)*
 - Add, switch between, and archive multiple pets per household; a pet switcher; a default pet.
 - Edit a pet's profile: name, species, breed, weight, birth date, diagnosis date, photo.
 - See a pet's linked vets from its profile.
@@ -63,15 +72,16 @@ Grouped by usage flow: setup → manage pets/vets/household → log → review �
   alarm" action hands off to the phone's own alarm/reminder app, and marking a dose done stays
   in that same app rather than asking the person to also come log it here.
 
-**Manage vets**
+**Manage vets** *(admin-only; everyone can view)*
 - One shared vet directory per household, not one list per pet.
 - Link a vet to a pet with a role label; a pet can have several vets, a vet can serve several
   pets; edit/remove links.
 
-**Manage household**
+**Manage household** *(admin-only)*
 - Admins: add a new member (mechanism specified in `security-privacy.md`), view the member list,
-  remove a member.
-- Non-admin members: view the member list; cannot add or remove anyone.
+  remove a member, rename the household, view/rotate/share the join code.
+- Non-admin members: view the member list only. They cannot add or remove anyone, rename
+  anything, or see the join code.
 
 **Log an entry** — the core loop, and the one place speed matters most
 - Pick entry type (Seizure / Health note), then which pet (defaults to last-viewed). This picker
@@ -95,9 +105,10 @@ Grouped by usage flow: setup → manage pets/vets/household → log → review �
   running "mention at next vet visit" list, and a combined all-pets view for multi-pet
   households.
 - Full history: filter by pet/type/date/logger, grouped by month.
-- View, edit, or delete an entry with confirmation; compare an entry to similar past ones.
+- View, edit, or delete an entry with confirmation (a non-admin can edit/delete only entries
+  they logged themselves; an admin, any entry); compare an entry to similar past ones.
 
-**Share with the vet**
+**Share with the vet** *(exporting is admin-only; anyone can hand the vet the phone)*
 - Two ways to share, both initiated entirely from your own phone, neither requiring the vet to
   have an account or any access to the app: hand the vet your phone to walk through the
   dashboard, charts, or timeline directly, or export a PDF (or CSV) and send it however's
