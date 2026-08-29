@@ -4,6 +4,9 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.gms.google-services")
+    // Retries a handful of emulator-backed Robolectric tests that occasionally blow their
+    // withTimeout budget on a contended CI runner (see tasks.withType<Test> block below).
+    id("org.gradle.test-retry") version "1.6.4"
 }
 
 android {
@@ -72,6 +75,32 @@ android {
 kotlin {
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_1_8)
+    }
+}
+
+// The emulator-backed Robolectric suite (see CLAUDE.md "Tests") runs sequentially in one JVM
+// fork, each test doing real Firestore round-trips against the local emulator. Every test passes
+// in isolation, but on a shared GitHub runner the slowest few occasionally overshoot their
+// `withTimeout` budget — one rotating test per run, always a timeout, never a real assertion
+// failure. Rather than keep widening the timeout constant (done twice already, still flaked at
+// 10s), give the fork more heap headroom and retry the rare flake in CI.
+tasks.withType<Test>().configureEach {
+    // Robolectric loads a full Android runtime per sandbox on top of the Firestore SDK's gRPC
+    // stack; the default 512m fork occasionally spends time in GC that counts against the
+    // per-test timeout budget.
+    maxHeapSize = "2g"
+
+    retry {
+        // CI only — locally a flake should be visible, not silently papered over.
+        if (providers.environmentVariable("CI").isPresent) {
+            maxRetries.set(3)
+            // If more than this many distinct tests fail, it's a real regression, not flakiness
+            // — stop retrying and let the build fail fast.
+            maxFailures.set(5)
+        }
+        // A test that only passes on retry still passes the build (that's the point), but it's
+        // reported so the flake stays visible in the test report rather than vanishing.
+        failOnPassedAfterRetry.set(false)
     }
 }
 
