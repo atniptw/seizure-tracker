@@ -64,6 +64,15 @@ the test tasks UP-TO-DATE rather than re-running them) — that's what CI relies
 `demo-seizuretracker-rules-test`), not the real `app/google-services.json`, so they need zero
 secrets and can't touch a real Firebase project.
 
+The emulator-backed suite runs sequentially in one JVM fork doing real Firestore round-trips, so
+on a contended CI runner the slowest few tests occasionally overshoot their `withTimeout` budget
+— always a `TimeoutCancellationException`, never a real assertion failure, a different test each
+run. `app/build.gradle.kts` handles this with the `org.gradle.test-retry` plugin (retries a
+failed test up to 3×, **CI only** — gated on the `CI` env var — so a local flake stays visible)
+plus a larger test-fork `maxHeapSize`. If a genuine bug slips through, `maxFailures` (5) still
+fails the build fast rather than retrying a real regression 3× per test. Prefer this over
+widening the timeout constant again.
+
 ## Architecture
 
 Single Gradle module (`:app`), package `com.atnip.seizuretracker`, min/target/compile SDK
