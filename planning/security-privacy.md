@@ -59,14 +59,14 @@ and the residual risk it accepts, so a future revisit has the reasoning in hand.
 
 | Actor | Goal | What stops it |
 |---|---|---|
-| A stranger with no code | Read a household's data | Security Rules: reads require `uid in members`; `codeIndex` is get-by-exact-id only, never listable, and holds no health data |
+| A stranger with no code | Read a household's data | Security Rules: reads require `uid in memberIds`; `codeIndex` is get-by-exact-id only, never listable, and holds no health data |
 | A stranger who guessed/brute-forced a code | Join a household | 31⁶ ≈ 887M codes, get-by-id only (no query), realistically requires online guessing against Firebase; rate-limited by Firebase and by the code being useless without also being unremoved. Residual risk accepted at this scale — see §4.2 |
-| A **removed** former member | Keep reading, or re-join | Removal drops their uid from `members` (reads/writes stop immediately) **and** an admin rotates the code (§4.2). Between removal and rotation, a removed member who kept the code could re-add themselves — accepted, see §4.3 |
+| A **removed** former member | Keep reading, or re-join | Removal drops their uid from `memberIds` (reads/writes stop immediately) **and** an admin rotates the code (§4.2). Between removal and rotation, a removed member who kept the code could re-add themselves — accepted, see §4.3 |
 | A **malicious current member** | Vandalize data, exfiltrate | Out of scope — full trust inside the household (§2.2). Mitigations are social (don't add people you don't trust) plus history being recoverable only via prior exports |
 | Someone holding a member's **unlocked phone** | Read the local cache, log entries | Optional device-level app lock (§6). A determined attacker with the unlocked device or filesystem access is out of scope |
 | A **network attacker** | Intercept traffic | TLS on every Firebase connection; no app-level plaintext |
 | **Google / Firebase** as the platform | Read stored data | In scope as an acknowledged limitation: the structured data is encrypted at rest with Google-managed keys, not end-to-end. This is why media is deliberately kept out of the cloud entirely (§5.4) — for the one asset class where "the provider genuinely cannot see it" was worth the cost |
-| A **stranded anonymous identity** | (Not an attacker) locks a seat or an admin slot | §4.5 — prevention (durable-credential requirement for the sole admin) plus an admin removal path |
+| A **stranded anonymous identity** | (Not an attacker) locks a seat or an admin slot | §3.2 guarantees any multi-person household already has a durable admin, so a stranded anon uid is never the only way back in; §4.5 covers detecting and removing the stale seat |
 
 ### 2.4 Explicitly out of scope for v1
 
@@ -86,39 +86,55 @@ Three, matching product-spec §4, all landing on a Firebase Auth uid that the ru
 |---|---|---|
 | Google (Credential Manager / FlutterFire) | Survives reinstall, device wipe, new phone | Anyone willing to attach an account — the default |
 | Apple | Same as Google | iOS users who prefer it; required for App Store if any third-party sign-in is offered |
-| Anonymous ("continue without an account") | Tied to the app install — **lost** on reinstall, "clear data", or a new device | A joiner who'd rather not attach anything, e.g. a petsitter there for two weeks |
+| Anonymous ("continue without an account") | Tied to the app install — **lost** on reinstall, "clear data", or a new device | A joiner who'd rather not attach anything (e.g. a petsitter there for two weeks); also a solo user trying the app before they invite anyone (§3.2) |
 
 No passwords, ever. No email/password provider — it adds a credential to secure and a reset
 flow to build for no benefit here.
 
-### 3.2 The durability rule: the sole admin must have a durable credential
+### 3.2 The durability rule: no shared household without a durable admin
 
 An anonymous uid that gets lost is unrecoverable — the next sign-in mints a brand-new uid,
 and there is no way to prove "I was that person." If that lost identity was the household's
 only admin, **the household is permanently locked** out of roster management: no one can add
 or remove members or promote a new admin.
 
-So: **a household's creator must sign in with Google or Apple**, and the app blocks
-"continue without an account" on the create-household path. Anonymous remains available on
-the *join* path. If an admin later wants to step back to being the only Google user and
-everyone else is anonymous, that's fine — the invariant is only "at least one admin has a
-durable credential," checked whenever an admin is removed or demoted (§4.4).
+That failure only *matters* once a second person's access depends on that admin, so the rule
+is scoped to exactly that moment rather than blocking anonymous creation outright:
 
-This is a real product constraint, not just an implementation note — it should be reflected
-in the create-household screen copy ("You'll need a Google or Apple account to create a
-household, so you don't get locked out later").
+- **Creating and using a household solo is allowed anonymously.** Someone can sign in with
+  "continue without an account", create a household, add pets, and log entries with no
+  Google/Apple credential. If they lose the device they lose their own un-shared data — the
+  same deal as any no-account single-device app, and nobody else is stranded.
+- **Before the household can gain a second member, the creating admin must link a durable
+  (Google/Apple) credential.** The join code is not generated or shown until then; the
+  "invite someone" / "share code" action triggers the link prompt first (`linkWithCredential`
+  keeps the same uid, so nothing migrates — §3.3). This guarantees that the instant a second
+  person *can* join, an admin already holds a recoverable identity.
+- From there the standing invariant is just **"the household always retains at least one
+  admin with a durable credential"**, re-checked on every admin removal or demotion (§4.4).
+
+Create-household screen copy should set the expectation up front: "You can start without an
+account — you'll just need to add Google or Apple before you can invite anyone else."
 
 ### 3.3 Account linking (anonymous → durable)
 
 Firebase Auth's `linkWithCredential` upgrades an anonymous user to Google/Apple **keeping
 the same uid** — membership, authored observations, and `loggedByName` all carry over with
-zero migration. The app should:
+zero migration. Two kinds of prompt:
 
-- After an anonymous user joins a household, show a soft, dismissible nudge: "Add a Google
-  or Apple account so you don't lose access if you reinstall." Not a wall.
-- Offer the same action anytime from settings.
-- Re-nudge (once) if an anonymous member is later made an admin — at that point durability
-  matters more.
+- **A hard gate, once:** an anonymous creator hits a required link prompt the first time
+  they try to invite someone / reveal the join code (§3.2). This is the *only* place linking
+  is mandatory.
+- **A soft, dismissible nudge everywhere else, never a wall:** after an anonymous user
+  *joins* a household ("Add a Google or Apple account so you don't lose access if you
+  reinstall"); to a solo anonymous creator who hasn't invited anyone yet (framed around not
+  losing their own data, not stranding anyone); and once more if an anonymous member is
+  later promoted to admin.
+- The link action is also available anytime from settings.
+
+On a successful link, the app updates the member's own `members/{uid}` doc so `authMethod`
+reflects the new durable provider — the last-durable-admin invariant (§4.4) and the rules in
+§8 read durability off that field, so it must not go stale.
 
 ### 3.4 Session & re-auth
 
@@ -131,7 +147,9 @@ for no proportionate gain. Device-level protection is handled separately and loc
 ### 4.1 Roles
 
 Two roles, stored as `role: "admin" | "member"` on `households/{id}/members/{uid}`
-(`architecture.md` §3). A household can have **more than one admin** (product-spec §2).
+(`architecture.md` §3 — the `members` subcollection is the source of truth; `memberIds` on
+the household doc is the Function-maintained access-check cache, and today's app calls that
+array `members`). A household can have **more than one admin** (product-spec §2).
 
 | Capability | Admin | Member |
 |---|---|---|
@@ -142,10 +160,14 @@ Two roles, stored as `role: "admin" | "member"` on `households/{id}/members/{uid
 | Remove a member | ✅ | ❌ |
 | Promote a member to admin / demote an admin | ✅ | ❌ |
 | Rename the household or a pet | ✅ | ✅ |
-| Delete the household | ✅ (last admin, with confirmation) | ❌ |
+| Delete the household | ✅ (confirmation-gated; members notified first — §7) | ❌ |
 
 Members seeing the join code is intentional — that's how "read it out to your partner"
 works today and there's no threat model reason to hide it from someone who's already inside.
+
+Revealing the join code for the first time and adding the first other member require the
+acting admin to hold a durable credential (§3.2). That's a one-time gate at the
+solo → shared transition, not a check on every invite afterward.
 
 ### 4.2 Joining
 
@@ -156,6 +178,9 @@ top-level `codeIndex/{code}` document to a household id, because a non-member ca
 
 Changes from today:
 
+- **The code doesn't exist until the household goes multi-person.** A solo anonymous creator
+  has no join code at all until they link a durable credential and choose to invite someone
+  (§3.2). Every household that already has more than one member always has a live code.
 - **The code is rotatable.** An admin can regenerate it; the app writes the new
   `codeIndex/{newCode}` doc, points the household's `code` field at it, and **deletes the
   old `codeIndex` doc** so the previous code stops resolving. This is the primary lever for
@@ -190,7 +215,7 @@ coordinating in person or by text anyway. Instead:
 
 - **Admins only** (tightened from today, where any member can remove any member).
 - Removal = delete the target's `members/{uid}` profile doc **and** remove their uid from
-  the household `members` array. Their reads and writes stop on the next rule evaluation.
+  the household `memberIds` array. Their reads and writes stop on the next rule evaluation.
 - **Their past observations stay.** Those are household data, not the departing member's
   personal data; `loggedByName` was snapshotted at write time (`architecture.md` §3) so the
   history still reads correctly. Deleting a member does not delete what they logged.
@@ -202,7 +227,9 @@ coordinating in person or by text anyway. Instead:
 
 ### 4.4 Admin grant, transfer, and the last-admin invariant
 
-- The **creator** is the first admin (durable credential guaranteed by §3.2).
+- The **creator** is the first admin. They may still be anonymous while solo; by the time
+  the household has a second member, §3.2's gate has forced them to link — so a shared
+  household always starts life with at least one durable admin.
 - Any admin can **promote** a member to admin or **demote** another admin, by writing the
   `role` field on that member's `members/{uid}` doc. This requires a rules change — today a
   member doc is writable only by its own uid (§8).
@@ -213,9 +240,12 @@ coordinating in person or by text anyway. Instead:
   Firestore Rules can't express "count the remaining admins" cheaply across a subcollection,
   so this invariant is enforced **client-side plus a Cloud Function** re-check on
   `members` writes that flags/repairs a violation; the rules keep the coarse "only an admin
-  writes roles" gate. Document this as a known soft spot — a determined member editing
-  requests directly could break the invariant, but the trust model (§2.2) already covers
-  that.
+  writes roles" gate. The Function checks durability against **Firebase Auth's real provider
+  data** (`getUser(uid).providerData` via the Admin SDK), not the self-reported `authMethod`
+  field on the member doc — that field is a UI convenience a member could set to anything.
+  Document this as a known soft spot: a determined member editing requests directly could
+  momentarily break the invariant before the Function repairs it, but the trust model (§2.2)
+  already covers that.
 - **Transfer** is just promote-then-demote (or promote-then-leave). There's no dedicated
   "transfer ownership" action because there's no single "owner" — only the admin set.
 
@@ -226,8 +256,9 @@ device, loses the uid, and their `members/{uid}` entry now belongs to an identit
 living device can authenticate as**. It's a dangling seat, not a security hole (that ghost
 uid can't actually do anything), but it's untidy and confusing.
 
-- **Prevention first:** the §3.2 rule keeps this out of the *admin* slot entirely, and the
-  §3.3 nudge pushes anonymous members toward linking before it happens.
+- **Prevention first:** §3.2 guarantees any household with more than one member has at least
+  one durable admin, so a stranded anonymous uid can never be the *only* way back into roster
+  management; the §3.3 nudge pushes the other anonymous members toward linking too.
 - **Detection (soft):** each member's `members/{uid}` doc carries a `lastActiveAt`,
   updated (throttled to ~once/day) when the app opens. The admin member list can then
   surface "hasn't opened the app in 90+ days" as a hint. We do **not** auto-remove on this —
@@ -306,7 +337,7 @@ re-auth" — Flutter `local_auth`):
 | Discontinue a **medication** | `active: false` + `endDate` set — **not** a delete | Deliberate: preserves history a vet may ask about (`architecture.md` §3) |
 | Remove a **member** | Profile doc + `members` entry deleted; their observations remain | §4.3. Prompt to rotate the code |
 | Delete a **household** | Admin-initiated, confirmation-gated; a **Cloud Function** recursively deletes all subcollections (pets, vets, observations, members, exportLog) and the `codeIndex` doc | Firestore never cascades, and a client can't be trusted to finish a multi-hundred-doc delete. Client rule stays `allow delete: if false` on the household doc — only the Function (Admin SDK) does it. Members are notified before it happens |
-| Delete my **account** | Anonymous: stop using it (the uid is already ephemeral). Google/Apple: unlink in settings, then Firebase Auth user deletion | Authored observations stay (household data). A member who wants their *name* scrubbed from history is a manual maintainer action in v1 — noted in §10 |
+| Delete my **account** | Anonymous: stop using it (the uid is already ephemeral). Google/Apple: unlink in settings, then Firebase Auth user deletion | Authored observations stay (household data). A member who wants their *name* scrubbed from history is a manual maintainer action in v1 — noted in §10. A solo anonymous creator who just stops leaves an orphaned household doc (no code, no other members); harmless at this scale, no cleanup mechanism in v1 |
 
 **Retention:** no automatic expiry. The whole value of the record is its longevity — a
 seizure-frequency trend over two years is the point. Data lives until a member deletes it or
@@ -324,18 +355,28 @@ For `firestore.rules` and `architecture.md` §6 to be updated to match §§3–7
    admin invariant (§4.4) is *not* expressed here — client + Function enforce it.
 2. **`members/{memberUid}` — delete restricted to admins.** Today: any member may delete any
    member doc. Needed: only an admin (or the uid itself, for self-leave).
-3. **`households/{id}` — `members` array shrink restricted to admins.** Today the update rule
-   allows any member to write the doc. Needed: removing a uid from `members` (array size
-   decreases, or a uid other than the caller's disappears) requires the caller be an admin.
-   The existing "a new member adds only themselves" join clause stays.
+3. **`households/{id}` — `memberIds` array shrink restricted to admins.** Today the update
+   rule allows any member to write the doc (and the array is still called `members`). Needed:
+   removing a uid from `memberIds` (array size decreases, or a uid other than the caller's
+   disappears) requires the caller be an admin. The existing "a new member adds only
+   themselves" join clause stays.
 4. **`codeIndex/{code}` — update & delete by household members.** Today: `if false`. Needed:
    a member of the household the code points to may delete it (rotation) and create the
    replacement. Consider restricting to admins to match §4.1.
 5. **`codeIndex/{code}` — document shape.** Now `{ householdId, householdName }` (§4.2
    preview). `get` stays "any signed-in by exact id"; `list` stays `false`.
-6. **`households/{id}` delete stays `if false`** — household teardown is Cloud-Function-only
+6. **`codeIndex/{code}` create — require a non-anonymous caller.** Belt-and-braces for the
+   §3.2 gate: `allow create` also asserts the caller is a durable identity — check the
+   `request.auth.token` for a non-anonymous provider (via `firebase.identities` /
+   `firebase.sign_in_provider`, or simply `token.email != null` for Google/Apple); the exact
+   claim is a rules-implementation detail, and note that `sign_in_provider` can lag a
+   `linkWithCredential` until the session re-authenticates. Effect: a join code can't be
+   published by an identity that could later strand the household. The client enforces the
+   same thing earlier and more gently (the link prompt); this just stops a hand-crafted
+   request from skipping it.
+7. **`households/{id}` delete stays `if false`** — household teardown is Cloud-Function-only
    (§7).
-7. New polymorphic **`observations`** collection (replacing today's separate `seizures` /
+8. New polymorphic **`observations`** collection (replacing today's separate `seizures` /
    `healthNotes`) keeps the same member-gated `read, write` rule those have now
    (`architecture.md` §3).
 
@@ -359,6 +400,9 @@ Adding to the list in `architecture.md` §9:
   Functions above and a small "pending invites" UI. Not v1.
 - **Self-serve "scrub my name from history"** for a departed member (§7). Manual maintainer
   action in v1; revisit if anyone asks.
+- **Exact UX of the force-link-before-invite gate** (§3.2): where the link prompt sits in
+  the invite flow, what the solo-creator nudge looks like, and whether "share code" and "add
+  member" are one action or two. For the Flutter onboarding design pass.
 - **A written privacy policy / data-handling statement** for anyone outside Tom's household
   who ends up using this — §5.5 is most of it already; needs to be an actual document if the
   app is ever distributed beyond family.
