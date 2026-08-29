@@ -1,7 +1,7 @@
 # Product Spec — Pet Health Diary (v1)
 
 **Status:** draft for discussion · **Last updated:** 2026-08-23
-**Companion docs:** `architecture.md` (Flutter/tech stack), `security-privacy.md` (threat model, data handling, and how admin/access/ownership actually works) — not yet written.
+**Companion docs:** `architecture.md` (Flutter/tech stack), `security-privacy.md` (threat model, data handling, and how admin/access/ownership actually works).
 
 ## 1. One-liner
 

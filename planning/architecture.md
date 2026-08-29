@@ -1,7 +1,7 @@
 # Architecture — Pet Health Diary (v1)
 
 **Status:** draft for discussion · **Last updated:** 2026-08-23
-**Companion docs:** `product-spec.md` (features, entities, non-goals), `security-privacy.md` (threat model, data handling, admin/access/ownership mechanics — not yet written)
+**Companion docs:** `product-spec.md` (features, entities, non-goals), `security-privacy.md` (threat model, data handling, admin/access/ownership mechanics)
 
 ## 1. Goals that shape every decision here
 
@@ -145,6 +145,6 @@ Rough numbers for a handful of households (say, under 20 users, low daily write 
 
 ## 11. Open items for other docs
 
-- Household join/invite mechanism, admin transfer, account durability → `security-privacy.md`
-- **Anonymous-auth member stranding:** a member who joins via "continue without an account" and later loses or resets that device without linking to a persistent account becomes unreachable — no one can sign back in as that identity, and there's no defined way for an admin to recognize this happened or remove that stale membership. Needs a definition in `security-privacy.md` (e.g. an admin-initiated removal path, or a nudge to link an account after joining).
+- Household join/invite mechanism, admin transfer, account durability → resolved in `security-privacy.md` §§3–4
+- **Anonymous-auth member stranding** → resolved in `security-privacy.md` §4.5 (sole admin must hold a durable credential; link-account nudge; `lastActiveAt` soft-detection; admin removal path)
 - Any decision to introduce a staging Firebase project or CI pipeline beyond what's in §10, if the project grows past single-maintainer hobby scale
