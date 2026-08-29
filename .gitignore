@@ -17,6 +17,13 @@ local.properties
 *.aab
 app/google-services.json
 app/debug.keystore
+# Signing material / release config — never commit (a leaked keystore password
+# can't be un-leaked by a later commit; a lost release keystore permanently
+# orphans the Play Store listing). Keep backups outside this repo.
+*.jks
+*.keystore
+key.properties
+*.p12
 node_modules/
 firestore-debug.log
 firebase-debug.log
