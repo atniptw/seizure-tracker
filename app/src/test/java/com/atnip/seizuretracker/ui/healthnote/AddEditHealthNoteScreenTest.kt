@@ -38,9 +38,9 @@ import org.robolectric.annotation.GraphicsMode
  * `testutil/FlowTestUtils.kt`'s `awaitFirst` for why both are needed for a screen backed by a
  * live Firestore listener.
  *
- * The native date/time picker dialog and the system photo picker aren't driven here (same
- * unexercised-native-dialog convention as `AddEditSeizureScreenTest`) — only the presence/
- * clickability of the buttons that open them is asserted.
+ * The native date/time picker dialog isn't driven here (same unexercised-native-dialog
+ * convention as `AddEditSeizureScreenTest`) — only the presence/clickability of the button
+ * that opens it is asserted.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])

@@ -22,7 +22,6 @@ data class Pet(
     val breed: String = "",
     val weightKg: Double? = null,
     val birthDateMillis: Long? = null,
-    val photoUri: String = "",
     val medications: List<Medication> = emptyList(),
     val createdAtMillis: Long = 0L
 )

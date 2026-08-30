@@ -13,7 +13,6 @@ data class HealthNote(
     val description: String = "",
     val timestampMillis: Long = 0L,
     val notes: String = "",
-    val photoUri: String = "",
     val loggedByName: String = "",
     val loggedByUid: String = "",
     val createdAtMillis: Long = 0L

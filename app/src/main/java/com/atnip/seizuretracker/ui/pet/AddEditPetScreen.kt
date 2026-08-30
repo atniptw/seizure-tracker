@@ -190,7 +190,6 @@ fun AddEditPetScreen(
                         breed = breed.trim(),
                         weightKg = weight.toDoubleOrNull(),
                         birthDateMillis = birthDateMillis,
-                        photoUri = existing?.photoUri ?: "",
                         medications = medications,
                         createdAtMillis = existing?.createdAtMillis ?: System.currentTimeMillis()
                     )

@@ -78,11 +78,11 @@ send it to them directly to sideload.
   onset, possible triggers, recovery time and notes, whether a rescue medication was given
   (and details), free-text notes, and who logged it.
 - **Log a health note**: a lightweight entry for anything else worth telling the vet — free
-  text, when it started, notes, and an optional photo.
+  text, when it started, and notes.
 - **History**: every past entry, most recent first, tap through to view or edit.
-- **Pet profiles**: one per pet (name, species, breed, weight, birth date, photo) with that
-  pet's list of maintenance medications (name/dose/frequency) — kept separate from the
-  "rescue med given during a seizure" field on each entry.
+- **Pet profiles**: one per pet (name, species, breed, weight, birth date) with that pet's
+  list of maintenance medications (name/dose/frequency) — kept separate from the "rescue med
+  given during a seizure" field on each entry.
 - **Vets**: one shared vet directory per household, with each vet linked to specific pets and
   a role label (general / emergency / neuro / other).
 - **Export for vet**: pick which pet, a date range (last 30 / 90 days, all time, or a custom
@@ -97,10 +97,11 @@ send it to them directly to sideload.
 - **Medication reminders/notifications** — the current-medications list is there for
   reference and for the exported report, but there's no scheduled reminder yet. Could be
   added later with WorkManager if useful.
-- **Cloud-stored attachments** — a health note or pet profile can carry one photo, but it's
-  kept as a local device reference, not uploaded to Firebase Storage (which needs a billing
-  account). A photo therefore isn't automatically on other members' devices. Video isn't
-  supported at all.
+- **Photo/video attachments** — not in this version at all (the earlier half-built photo
+  capture was removed). Backlogged; when built, media stays on-device rather than in Firebase
+  Storage (which needs a billing account) — see `planning/architecture.md` §8.
+- **Household notifications** — no "a new entry was just logged" push. Backlogged; needs a
+  Cloud Function, which the backend avoids for now.
 - **Roles / permissions** — there's no admin vs. member distinction yet. Any member can edit
   anything and remove any other member. The `planning/` docs describe a role split as a
   future change.

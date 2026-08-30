@@ -243,8 +243,9 @@ Changes from today:
 an admin has to be present and notice) for a household of people who are, by construction,
 coordinating in person or by text anyway. Instead:
 
-- Joining triggers a notification to the household's admins ("Sam joined the household") —
-  see `architecture.md` §5 when notifications are designed — so a join is never silent.
+- Once notifications exist (post-v1, `architecture.md` §5), joining notifies the household's
+  admins ("Sam joined the household") so a join is never silent. Until then the join shows up
+  in the member list, which every member can see.
 - The residual risk: a code that leaked (forwarded screenshot, shoulder-surf) lets an
   outsider join in the window before an admin notices and rotates. Accepted for v1. The
   upgrade path if it ever bites — admin-generated single-use invite codes with a short TTL —
@@ -262,8 +263,8 @@ coordinating in person or by text anyway. Instead:
   personal data; `loggedByName` was snapshotted at write time (`architecture.md` §3) so the
   history still reads correctly. Deleting a member does not delete what they logged.
 - **The app should prompt the admin to rotate the code** right after a removal — otherwise a
-  removed member who kept the code can immediately re-join. The removal notification to
-  other admins should say so too.
+  removed member who kept the code can immediately re-join. Once notifications exist (post-v1),
+  the removal notice to other admins should say so too.
 - An admin removing **themselves** (leaving the household) is allowed, subject to the
   last-admin invariant below.
 
@@ -292,6 +293,10 @@ coordinating in person or by text anyway. Instead:
   "transfer ownership" action because there's no single "owner" — only the admin set.
 
 ### 4.5 Stranded anonymous members
+
+**Current household:** both members are signed in with Google, so this scenario doesn't apply
+to the live deployment today. The mechanics below stay in the design because anonymous sign-in
+remains a supported path (a petsitter, a try-before-invite solo user).
 
 The failure `architecture.md` §11 flags: an anonymous member reinstalls or resets their
 device, loses the uid, and their `members/{uid}` entry now belongs to an identity **no
@@ -336,11 +341,15 @@ can read the cached household data. The mitigation is the optional app lock in �
 DataStore/prefs equivalents (household id, display name, app-lock setting) are per-device
 and never synced.
 
-### 5.4 Media — local-only
+### 5.4 Media — local-only (post-v1)
 
-Photos and video never touch any cloud we operate. Firestore stores only a tiny reference
-(who captured it, type). Sharing a file to another member or a vet is a manual action
-through the OS share sheet. Full rationale and trade-offs in `architecture.md` §8. The
+Photo/video attachments are **backlogged — not in the next release** (`architecture.md` §8).
+This section records the privacy stance for when they're built; the shipped app has no
+attachment feature.
+
+The stance: photos and video never touch any cloud we operate. Firestore stores only a tiny
+reference (who captured it, type). Sharing a file to another member or a vet is a manual
+action through the OS share sheet. Full rationale and trade-offs in `architecture.md` §8. The
 privacy win, restated in this doc's terms: for media there is **no provider-can-read
 question at all**, because the file never leaves the devices that hold it. The cost — an
 attachment isn't automatically on every member's device — is accepted in §8 there.

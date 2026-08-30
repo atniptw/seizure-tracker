@@ -24,6 +24,10 @@ redesign, but on a different Firestore shape. Things below that are **not yet bu
   the household doc; the admin-only config doc does not exist yet.
 - **Medications as a subcollection with `active`/`endDate`.** Today they're an embedded
   array on the pet doc with no lifecycle fields; discontinuing one deletes it.
+- **Household notifications (§5) and photo/video attachments (§8).** Both are explicitly
+  **out of the next release and backlogged** — see those sections. §5 stays a design sketch;
+  §8's local-only conclusion still stands as the approach for when attachments are built. The
+  shipped app has no notification code, and its half-built `photoUri` capture was removed.
 
 ## 1. Goals that shape every decision here
 
@@ -44,8 +48,8 @@ Pulled straight from the product spec and the project's own constraints, because
 | Local persistence / offline cache | Firestore's built-in offline persistence (SQLite under the hood) | Firestore ships this for free — no separate local DB or hand-rolled sync engine to build or maintain. |
 | Backend | Firebase (Firestore, Auth, Cloud Functions, Cloud Messaging) | Serverless, generous free tier, first-class Flutter support via FlutterFire. Picked over Supabase specifically to avoid running any backend Tom would need to maintain. |
 | Auth | Firebase Auth (Google, Apple, anonymous) | Matches the spec's three sign-in options exactly, including "continue without an account" via anonymous auth. |
-| Push notifications | Firebase Cloud Messaging | Needed for "saving notifies the rest of the household." |
-| Media (photos/videos) | Local device storage only + OS-native share sheet (`share_plus`) | No Cloud Storage, no Blaze plan requirement, no encryption to design. See §8. |
+| Push notifications | Firebase Cloud Messaging | For "saving notifies the rest of the household" — **post-v1, backlogged (§5)**. |
+| Media (photos/videos) | Local device storage only + OS-native share sheet (`share_plus`) | No Cloud Storage, no Blaze plan requirement, no encryption to design. **Post-v1, backlogged (§8).** |
 | PDF/CSV export | Generated on-device (Dart packages), not server-side | Avoids a Cloud Function cold-start on the export path and keeps exports working offline once data is cached locally. |
 | Hosting (web dashboard, if built) | Firebase Hosting | Free tier, same project as everything else. |
 
@@ -64,7 +68,8 @@ households/{householdId}/members/{uid}
   displayName, role: "admin" | "member", joinedAt, authMethod
   # source of truth for household membership; only an admin may write another member's `role`
 households/{householdId}/pets/{petId}
-  name, species, breed, weight, birthDate, diagnosisDate, photoRef, archived: bool
+  name, species, breed, weight, birthDate, diagnosisDate, archived: bool
+  # photoRef: post-v1 with the rest of attachments (§8)
   linkedVets: [{ vetId, vetName, role }, ...]
   # sole copy of the pet↔vet relationship — see denormalization note below
 households/{householdId}/pets/{petId}/medications/{medId}
@@ -79,9 +84,9 @@ households/{householdId}/observations/{observationId}
   createdAt, updatedAt
   summary: string                             # short human-readable line for the feed,
                                                #   e.g. "2 min tonic-clonic"
-  attachment: { type: "photo" | "video", capturedByUid, localFileRef } | null
-    # local-only — see §8. Present on any observation type, not just notes,
-    #   since a seizure video is arguably the most valuable attachment case.
+  # attachment: {...} | null                  # post-v1 — see §8. Not written in the next
+                                               #   release; added to the envelope when
+                                               #   attachments are built.
   details: { ...type-specific fields... }
     # seizure: duration, seizureType, symptoms[], preSeizureSigns[], triggers,
     #   recoveryTime, recoveryBehavior, recoveryNotes, rescueMedGiven, rescueMedDetails, notes
@@ -98,7 +103,7 @@ codeIndex/{code}
 
 The document is split into two parts on purpose:
 
-- **Envelope** — fields common to every observation type, and specifically the fields ever queried, sorted, or filtered on: `petId`, `type`, `occurredAt`, `attachment`. These stay top-level so the timeline/export/notification queries don't care what type an observation is.
+- **Envelope** — fields common to every observation type, and specifically the fields ever queried, sorted, or filtered on: `petId`, `type`, `occurredAt` (plus `attachment` once that lands, §8). These stay top-level so the timeline/export queries don't care what type an observation is.
 - **`details`** — a type-specific payload map, read but never filtered on. Firestore doesn't enforce a schema, so this costs nothing structurally; it just keeps the type-specific fields out of the shared query surface.
 
 This means adding a new observation type later (medication given, vet visit note, weight check) is just a new `type` value and a new `details` shape defined in the Flutter data layer (a sealed/freezed union per type works well so the client isn't passing raw maps around) — no new collection, no new Firestore indexes, and no security-rule changes beyond what §6 already covers. Two things this deliberately leaves undone: field-level validation ("seizure observations must have `seizureType`") is left to the Dart model layer rather than Security Rules, since there's a single trusted client codebase and no third-party writers; and this pattern is meant for point-in-time logged events, not ongoing state — something like a recurring medication *schedule* (as opposed to a log of doses given) would need its own shape rather than being forced into `observations`.
@@ -121,7 +126,13 @@ This is the architecture's central requirement, so it's worth being explicit abo
 
 ## 5. Household notifications
 
-Deferred — not designed yet. The spec calls for "saving notifies the rest of the household," and Firebase Cloud Messaging is the natural fit when it's time (a client can't push to another user's device directly, so this will need a small Cloud Function trigger on observation-create), but there's no need to lock in the details now. Worth a pass before v1 ships, not before.
+**Out of the next release — backlogged.** The spec's "saving notifies the rest of the
+household" is not built and not scheduled. Firebase Cloud Messaging is the natural fit when
+it's time (a client can't push to another user's device directly, so this needs a small Cloud
+Function trigger on observation-create) — but that Function would put the project on the Blaze
+plan, which everything else here (§8, §9) is built to avoid. So this feature carries a real
+cost decision (accept Blaze for one Function, or find a non-Function path) that's deferred
+along with the feature. Nothing to lock in now.
 
 ## 6. Access control
 
@@ -140,11 +151,16 @@ Generated **on-device**, not via a Cloud Function, for two reasons: it works off
 
 - CSV: straightforward serialization of the filtered observation set.
 - PDF: built with the `pdf` and `printing` Dart packages — enough for a clean report with a header, per-observation sections, and an optional trend chart rendered to an image and embedded.
-- Because attachments are local-only (§8), a PDF/CSV export built on one device can only embed the photos/videos actually present on that device — an observation logged (with attachment) on someone else's phone shows up with its text but not its media unless that attachment was shared to this device first. Worth a note in the exported file itself ("N attachments not available on this device") so it doesn't read as data loss.
+- Attachments are post-v1 (§8), so exports are text-only for now. When attachments land: because they're local-only, an export built on one device can only embed the media present on that device, and the exported file should say so ("N attachments not available on this device") rather than read as data loss.
 - Exporting is an **admin-only** action (`security-privacy.md` §4.1) — an export leaves the household as a file. A non-admin who needs the vet report asks an admin, or hands the vet the phone directly (which anyone can do).
 - The "log of past exports" is a small record (export type, date range, timestamp) written to `households/{householdId}/exportLog/{id}` — created only by an admin (the rules match the export gate, `security-privacy.md` §8), readable by any member so anyone can see when an export last happened.
 
-## 8. Media storage — resolved: local-only, no cloud
+## 8. Media storage — post-v1; approach decided: local-only, no cloud
+
+**Photo/video attachments are out of the next release and backlogged.** The shipped app's
+half-built photo capture (a `photoUri` string that was never displayed or exported) has been
+removed. This section records the *approach* for when attachments are built — that decision
+holds — but nothing here is in the next version.
 
 The product spec flagged this as unresolved: attachments need to be useful to the household, but must not sit in the cloud the same way the rest of the household's data does. The original plan here was Firebase Storage with client-side encryption. Two things changed that conclusion:
 
@@ -152,7 +168,7 @@ First, Cloud Storage for Firebase now requires the Blaze (pay-as-you-go) plan fo
 
 Second, and more decisively: given how the household actually uses this app — people who see each other in person at least sometimes — going through the cloud at all was solving a problem that didn't need solving. **Attachments (photos and video) live only on the device that captured them.** Firestore stores just a small attachment reference on the observation (who captured it, what type) — effectively free, since it's tiny like the rest of the observation data. Sharing the actual file to another household member, or to a vet, is a manual action through the platform's native share sheet (`share_plus` in Flutter, which surfaces AirDrop on iOS and Nearby Share on Android, alongside Messages/email/whatever else is installed) — no custom transfer protocol, no server relay, reusing infrastructure Apple and Google already maintain.
 
-This is a deliberate trade-off, made with eyes open: attachments are **not** automatically available on every household member's device the way the rest of an observation is. A photo exists on the phone that took it until someone deliberately sends it elsewhere. Given this app is free, built as a gift on Tom's own time, and the value of an attachment being *available* clearly outweighs the inconvenience of it not being *automatically everywhere*, that's an acceptable v1 trade — and it can be revisited later if it turns out to bother people more than expected.
+This is a deliberate trade-off, made with eyes open: attachments are **not** automatically available on every household member's device the way the rest of an observation is. A photo exists on the phone that took it until someone deliberately sends it elsewhere. Given this app is free, built as a gift on Tom's own time, and the value of an attachment being *available* clearly outweighs the inconvenience of it not being *automatically everywhere*, that's an acceptable trade — and it can be revisited later if it turns out to bother people more than expected.
 
 What this buys, beyond dodging the Blaze requirement:
 
@@ -165,8 +181,8 @@ What this buys, beyond dodging the Blaze requirement:
 Rough numbers for a handful of households (say, under 20 users, low daily write volume):
 
 - **Firestore, Auth, Hosting, FCM:** comfortably within Firebase's free Spark plan at this scale.
-- **Cloud Functions:** the functions described (membership-cache sync, notification fan-out, vet-deletion cleanup, and the ones `security-privacy.md` §9 adds — last-durable-admin re-check, join/removal notifications, recursive household delete) are all low-volume triggers, well within the free tier's invocation/compute allowance.
-- **No Cloud Storage, no Blaze plan.** Since media is local-only (§8), there's nothing pushing this project off the Spark plan at all — the whole project can realistically stay fully free indefinitely at this scale, with no billing account on file and no usage to monitor for media specifically.
+- **Cloud Functions:** none are deployed or planned for the next release. The functions this doc and `security-privacy.md` §9 sketch (membership-cache sync, notification fan-out, vet-deletion cleanup, last-durable-admin re-check, join/removal notifications, recursive household delete) are all low-volume triggers that would fit the free tier's compute allowance — but deploying *any* Function requires the Blaze plan (billing account), which is why every feature that needs one is deferred.
+- **No Cloud Storage, no Cloud Functions, no Blaze plan.** Media is post-v1 (§8) and notifications are post-v1 (§5), so nothing pushes this project off the Spark plan — it stays fully free at this scale, with no billing account on file.
 - If future features ever do need Blaze (some other metered service), Firebase's pricing is per-use rather than a flat server bill, so cost scales with actual usage rather than jumping to a fixed monthly charge.
 
 ## 10. Deployment

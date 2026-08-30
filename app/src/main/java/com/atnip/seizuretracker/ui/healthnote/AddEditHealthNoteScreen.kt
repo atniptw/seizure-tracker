@@ -2,9 +2,6 @@ package com.atnip.seizuretracker.ui.healthnote
 
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -16,12 +13,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Image
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -42,8 +37,8 @@ import com.atnip.seizuretracker.util.DateTimeUtils
 import java.util.Calendar
 
 /**
- * Screen 3 — deliberately minimal (free text, when, notes, photo). Resist adding structured
- * fields without user research, per the design handoff's stated product priority.
+ * Screen 3 — deliberately minimal (free text, when, notes). Resist adding structured fields
+ * without user research, per the design handoff's stated product priority.
  */
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
@@ -65,12 +60,7 @@ fun AddEditHealthNoteScreen(
     var description by remember(existing) { mutableStateOf(existing?.description ?: "") }
     var timestampMillis by remember(existing) { mutableStateOf(existing?.timestampMillis ?: System.currentTimeMillis()) }
     var notes by remember(existing) { mutableStateOf(existing?.notes ?: "") }
-    var photoUri by remember(existing) { mutableStateOf(existing?.photoUri ?: "") }
     var saving by remember { mutableStateOf(false) }
-
-    val photoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri -> if (uri != null) photoUri = uri.toString() }
 
     fun pickDateTime() {
         val cal = Calendar.getInstance().apply { timeInMillis = timestampMillis }
@@ -142,18 +132,6 @@ fun AddEditHealthNoteScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            OutlinedButton(
-                onClick = {
-                    photoPickerLauncher.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                    )
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(Icons.Filled.Image, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
-                Text(if (photoUri.isBlank()) "Add a photo" else "Change photo")
-            }
-
             Spacer(Modifier.height(8.dp))
 
             PrimaryPillButton(
@@ -168,7 +146,6 @@ fun AddEditHealthNoteScreen(
                         description = description,
                         timestampMillis = timestampMillis,
                         notes = notes,
-                        photoUri = photoUri,
                         loggedByName = existing?.loggedByName ?: displayName,
                         loggedByUid = existing?.loggedByUid ?: uid,
                         createdAtMillis = existing?.createdAtMillis ?: System.currentTimeMillis()

@@ -120,7 +120,6 @@ class ExportScreenTest {
             composeRule.onNodeWithText("Custom").assertExists()
             composeRule.onNodeWithText("Seizures").assertExists()
             composeRule.onNodeWithText("Health notes").assertExists()
-            composeRule.onNodeWithText("Photos attached to notes").assertExists()
             composeRule.onNodeWithText("PDF").assertExists()
             composeRule.onNodeWithText("CSV").assertExists()
         }

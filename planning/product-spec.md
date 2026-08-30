@@ -41,7 +41,8 @@ non-admin role is for someone who should only ever add entries. Full capability 
   setup (pets, vets, medications, members) is admin-only (see §2). Has one or more admins.
   Access and ownership mechanics are specified in `security-privacy.md`.
 - **Pet** — belongs to a household: name, species (dog/cat/other), breed, weight, birth date,
-  photo, and its own list of maintenance medications. A household can have any number of pets.
+  and its own list of maintenance medications. A household can have any number of pets. (A pet
+  photo is part of the backlogged attachments work — see §5.)
 - **Vet** — a shared, reusable contact per household (not per pet): name, phone, notes.
 - **Pet↔Vet link** — many-to-many, each link labeled with a role (General / Emergency / Neuro
   specialist / Other). One clinic can be "General" for one pet and "Emergency" for another.
@@ -49,8 +50,8 @@ non-admin role is for someone who should only ever add entries. Full capability 
   symptom checklist, pre-seizure signs, triggers, recovery time/behavior/notes, rescue med
   given + details, free notes, who logged it.
 - **Health note** — a deliberately lightweight entry type for anything else worth mentioning to
-  the vet: free-text description, when it started, notes, optional photo. Stays unstructured on
-  purpose (see non-goals, §5).
+  the vet: free-text description, when it started, notes. Stays unstructured on purpose (see
+  non-goals, §5).
 - **Maintenance medication** — belongs to a pet, not an entry: name/dose/frequency/notes. Distinct
   from a rescue med given during a seizure, which is recorded on that seizure entry instead.
 - **Member profile** — display name, sign-in method, and role (admin / non-admin) per
@@ -100,9 +101,7 @@ Grouped by usage flow: setup → manage pets/vets/household → log → review �
   missed or late maintenance dose gets captured if it's relevant to this seizure — there's no
   separate dose-tracking feature (see §5); this is the one moment adherence actually matters
   enough to write down.
-- Health note form: free text, start time, notes, photo. Stays minimal — see §5.
-- Saving notifies the rest of the household, so a partner knows an entry just happened without
-  having the app open.
+- Health note form: free text, start time, notes. Stays minimal — see §5.
 - Logging works fully offline; entries sync automatically once the device is back online.
 
 **Review history**
@@ -138,14 +137,17 @@ Grouped by usage flow: setup → manage pets/vets/household → log → review �
   and applies household-wide. No per-pet access, no per-field editing rights, no "can edit
   vets but not pets" middle tier. If the binary turns out too blunt in real use, that's a
   post-v1 conversation (`security-privacy.md` §10), not a v1 feature.
-- **The photo/video storage design is not decided in this document.** V1 wants photo/video
-  attachments (health notes, pet photos), with one constraint set here because it shapes the
-  feature itself: media should not be stored in the cloud the way the rest of the household's
-  data is. How to still make an attachment available to every household member without a cloud
-  copy (on-device only with direct device-to-device transfer, encrypted-at-rest cloud storage
-  the provider can't read, something else) is a real open problem, not a settled decision — see
-  §6. It's called out here because it may mean attachments behave differently from every other
-  entity in this spec, not because the answer is known.
+- **No photo/video attachments in the next release.** Health-note photos, pet photos, and
+  seizure video are all backlogged. When they're built, one constraint holds: media must not
+  be stored in the cloud the way the rest of the household's data is. `architecture.md` §8
+  settled the *approach* (local-only, on-device, shared device-to-device via the OS share
+  sheet — no cloud copy, no encryption to design); what's left for that later work is the
+  receipt UX (matching a shared file back to its entry) and retention. The shipped app's
+  half-built photo capture has been removed.
+- **No household notifications in the next release.** "Saving notifies the rest of the
+  household" is backlogged — it needs a Cloud Function (push can't go device-to-device), which
+  the backend deliberately avoids (`architecture.md` §5, §9). Until then a partner sees a new
+  entry the next time they open the app.
 - **No in-app medication reminders or dose-given tracking.** We're not taking on responsibility
   for an alarm firing reliably (background execution, OS battery/notification restrictions,
   etc.), and marking a dose done belongs in whatever alarm/reminder app the person already used
@@ -164,10 +166,14 @@ Access, admin, and ownership mechanics (how someone joins, how admin status is g
 transferred, account durability) belong in `security-privacy.md` and are intentionally not
 listed here — this doc only tracks product-scope questions.
 
-1. **Photo/video storage and retention.** Media must not live in the cloud the way the rest of
-   the household's data does, but still needs to reach every household member somehow — that's
-   the core problem to investigate for `architecture.md`/`security-privacy.md` (candidates:
-   direct device-to-device transfer, provider-can't-read encrypted cloud storage, sync only
-   while both devices are on the same network, etc.). Once a mechanism is chosen: how long is
-   media kept, is it deleted with the entry it's attached to, and does it need the same
-   offline-cache behavior as the rest of the data?
+1. **Structured health-note fields.** Whether severity / category / vitals fields are worth
+   adding to the health note is deferred until there's real usage data — see §5. Not
+   actionable now.
+
+Backlogged features (not open questions — decided to defer, design captured elsewhere):
+
+- **Photo/video attachments** — approach settled in `architecture.md` §8 (local-only). Open
+  sub-parts for when it's built: the receipt UX and retention (is media deleted with its
+  entry, does it need offline-cache behavior).
+- **Household notifications** — `architecture.md` §5. Carries a cost decision (a Cloud
+  Function means the Blaze plan).

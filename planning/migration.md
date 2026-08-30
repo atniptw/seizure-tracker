@@ -57,7 +57,7 @@ seizure history. Everything in §4's safeguards exists for that, and only that.
 | Join code | `households/{id}.code` field (every member reads it) | `households/{id}/private/config.joinCode` — admin-only read/write | `security-privacy.md §4.2`, §8 item 6. Removed from the household doc at cleanup. |
 | Code index | `codeIndex/{code}` = `{ householdId }` | `codeIndex/{code}` = `{ householdId, householdName }` | `security-privacy.md §8` item 8. Adds the join-preview name, nothing else. |
 | Medications | `Pet.medications: [Medication]` embedded array; discontinue = delete | `pets/{petId}/medications/{medId}` subcollection + `active`, `startDate`, `endDate` | `architecture.md §3`. Backfill lifts the array into docs. |
-| Attachments | `photoUri: String` on `HealthNote` and `Pet` | `attachment: { type, capturedByUid, localFileRef } \| null` on the observation | `architecture.md §8`. Still local-only; just the envelope shape. Low stakes — most are empty. |
+| Attachments | dormant `photoUri: String` on `HealthNote` and `Pet` (never displayed, now removed from code) | nothing — attachments are post-v1 (`architecture.md §8`) | Backfill drops any legacy `photoUri` value. The `attachment` envelope field is added when attachments are actually built. |
 | Export log | none | `households/{id}/exportLog/{id}` — admin-create, member-read | `architecture.md §7`. New, empty collection; no backfill. |
 
 ### `observations` envelope, and how each legacy doc maps
@@ -70,19 +70,16 @@ observations/{id}
   createdAt:  Timestamp        # from createdAtMillis (fallback: occurredAt)
   updatedAt:  Timestamp        # = createdAt at backfill time
   summary: string              # synthesized (see below)
-  attachment: {...} | null
   details: { ...type-specific... }
+  # no attachment field — attachments are post-v1 (architecture.md §8)
 ```
 
 - **`seizures/{id}` → `type: "seizure"`.** `details` gets `durationSeconds`, `seizureType`,
   `symptoms`, `preSeizureSigns`, `possibleTriggers`, `recoveryMinutes`, `recoveryNotes`,
   `rescueMedGiven`, `rescueMedDetails`, `notes`. `summary` = e.g.
   `"4 min · Generalized (grand mal)"` from duration + type, `"seizure"` if both empty.
-  `attachment: null` (seizures have no photo field today).
 - **`healthNotes/{id}` → `type: "note"`.** `details` gets `description`, `notes`.
-  `summary` = first ~60 chars of `description`.
-  `attachment` = `{ type: "photo", capturedByUid: loggedByUid, localFileRef: photoUri }` if
-  `photoUri` non-empty, else `null`.
+  `summary` = first ~60 chars of `description`. Any legacy `photoUri` value is dropped.
 - Legacy `id` is **preserved** as the new doc id (`observations/{sameId}`), so a backfill
   re-run is idempotent and any local reference survives.
 

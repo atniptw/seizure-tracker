@@ -165,18 +165,6 @@ fun ExportScreen(
                 Checkbox(checked = options.includeHealthNotes, onCheckedChange = null)
                 Text("Health notes")
             }
-            Column {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = false, onCheckedChange = {}, enabled = false)
-                    Text("Photos attached to notes", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Text(
-                    "Photo attachments aren't included in exports yet.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 40.dp)
-                )
-            }
 
             Text("Format", style = MaterialTheme.typography.labelLarge)
             SegmentedControl(
