@@ -10,12 +10,12 @@ This plan covers the **backend / data-model move** on the *current Kotlin + Comp
 getting the shipped app onto the Firestore shape, Security Rules, and role model that
 `architecture.md` and `security-privacy.md` describe, **without losing any of the household's
 logged history**. Landing the data-shaped decisions now — while the schema is small — means
-the eventual Flutter port (`architecture.md §0`) is a near-pure client rewrite against a
+the eventual Flutter port (`flutter-migration.md`) is a near-pure client rewrite against a
 backend that already looks like its target.
 
 **Out of scope** (deferred — see §8 for why each is safe to defer):
 
-- The Flutter client rewrite.
+- The Flutter client rewrite (`flutter-migration.md`, sequenced after this).
 - Splitting `memberIds` into a Function-maintained cache + `members` subcollection as sole
   source of truth. Keep the client-written array.
 - **Any Cloud Functions.** Deploying one forces the project onto the Blaze plan (billing

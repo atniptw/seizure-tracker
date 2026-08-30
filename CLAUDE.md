@@ -14,8 +14,11 @@ adding `google-services.json`).
 
 The `planning/` docs (`architecture.md`, `product-spec.md`, `security-privacy.md`) describe a
 larger target state — a Flutter rewrite, a polymorphic `observations` collection, admin/member
-roles, Cloud Functions — that is **not** built. `architecture.md §0` lists the gaps. Treat
-those docs as design intent, not a description of the current code.
+roles — that is **not** built. `architecture.md §0` lists the gaps. Two sequenced plans cover
+getting there: `migration.md` (move the current Kotlin app onto the target Firestore
+shape/rules) then `flutter-migration.md` (re-platform the client to Flutter/Dart for iOS +
+Android). Notifications and photo/video attachments are backlogged out of the next release.
+Treat all of these as design intent, not a description of the current code.
 
 ## Build & run
 

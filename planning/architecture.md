@@ -9,7 +9,8 @@ This describes where the app is headed, not what runs today. The shipped app is 
 Jetpack Compose** (not Flutter) and already does the multi-pet / vets / health-notes
 redesign, but on a different Firestore shape. Things below that are **not yet built**:
 
-- **Flutter client.** Today it's native Android/Kotlin; the Flutter port is a separate plan.
+- **Flutter client.** Today it's native Android/Kotlin; the Flutter port is planned in
+  `flutter-migration.md` (sequenced after `migration.md`).
 - **`observations` collection.** Today seizures and health notes are two collections
   (`seizures`, `healthNotes`), not one polymorphic collection.
 - **Admin/member roles.** Today there are no roles — every member can write everything, and
