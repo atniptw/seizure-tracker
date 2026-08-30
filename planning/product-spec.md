@@ -49,8 +49,8 @@ non-admin role is for someone who should only ever add entries. Full capability 
   symptom checklist, pre-seizure signs, triggers, recovery time/behavior/notes, rescue med
   given + details, free notes, who logged it.
 - **Health note** — a deliberately lightweight entry type for anything else worth mentioning to
-  the vet: free-text description, when it started, notes, optional photo, a "flag for vet"
-  toggle. Stays unstructured on purpose (see non-goals, §5).
+  the vet: free-text description, when it started, notes, optional photo. Stays unstructured on
+  purpose (see non-goals, §5).
 - **Maintenance medication** — belongs to a pet, not an entry: name/dose/frequency/notes. Distinct
   from a rescue med given during a seizure, which is recorded on that seizure entry instead.
 - **Member profile** — display name, sign-in method, and role (admin / non-admin) per
@@ -100,16 +100,14 @@ Grouped by usage flow: setup → manage pets/vets/household → log → review �
   missed or late maintenance dose gets captured if it's relevant to this seizure — there's no
   separate dose-tracking feature (see §5); this is the one moment adherence actually matters
   enough to write down.
-- Health note form: free text, start time, notes, photo, a flag-for-vet toggle. Stays minimal —
-  see §5.
+- Health note form: free text, start time, notes, photo. Stays minimal — see §5.
 - Saving notifies the rest of the household, so a partner knows an entry just happened without
   having the app open.
 - Logging works fully offline; entries sync automatically once the device is back online.
 
 **Review history**
-- Dashboard: days since last seizure, total count, recent entries, a frequency trend, a
-  running "mention at next vet visit" list, and a combined all-pets view for multi-pet
-  households.
+- Dashboard: days since last seizure, total count, recent entries, a frequency trend, and a
+  combined all-pets view for multi-pet households.
 - Full history: filter by pet/type/date/logger, grouped by month.
 - View, edit, or delete an entry with confirmation (a non-admin can edit/delete only entries
   they logged themselves; an admin, any entry); compare an entry to similar past ones.
@@ -128,7 +126,7 @@ Grouped by usage flow: setup → manage pets/vets/household → log → review �
 
 - **The health note stays unstructured.** No severity scale, category picker, or vitals fields
   until there's real usage data on what people actually want to record there — it ships as free
-  text + flag, and only that.
+  text, and only that.
 - **Nothing about multi-pet support or the entry-type picker may slow down logging a seizure.**
   If any design decision in onboarding, the entry-type picker, or navigation adds friction to
   that flow, the decision is wrong for v1, full stop.

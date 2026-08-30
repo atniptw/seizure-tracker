@@ -149,7 +149,6 @@ object PdfExporter {
                     drawLine("$petPrefix${DateTimeUtils.formatDateTime(n.timestampMillis)} · Health note", headingPaint)
                     drawWrapped("Description", n.description)
                     drawWrapped("Notes", n.notes)
-                    drawWrapped("Flagged for vet", if (n.flaggedForVet) "Yes" else "No")
                     drawWrapped("Logged by", n.loggedByName)
                 }
             }

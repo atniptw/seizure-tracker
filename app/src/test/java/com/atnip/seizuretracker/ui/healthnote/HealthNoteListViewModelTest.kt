@@ -60,7 +60,6 @@ class HealthNoteListViewModelTest {
 
             val notes = viewModel.healthNotes.awaitFirst { it.isNotEmpty() }
             assertEquals("Limping", notes[0].description)
-            assertTrue(notes[0].flaggedForVet)
             val added = notes[0]
 
             viewModel.updateHealthNote(added.copy(description = "Limping less"))

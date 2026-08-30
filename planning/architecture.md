@@ -77,7 +77,6 @@ households/{householdId}/observations/{observationId}
   petId, loggedByUid, loggedByName
   occurredAt                                  # when the thing happened
   createdAt, updatedAt
-  flagForVet: bool
   summary: string                             # short human-readable line for the feed,
                                                #   e.g. "2 min tonic-clonic"
   attachment: { type: "photo" | "video", capturedByUid, localFileRef } | null
@@ -99,7 +98,7 @@ codeIndex/{code}
 
 The document is split into two parts on purpose:
 
-- **Envelope** — fields common to every observation type, and specifically the fields ever queried, sorted, or filtered on: `petId`, `type`, `occurredAt`, `flagForVet`, `attachment`. These stay top-level so the timeline/export/notification queries don't care what type an observation is.
+- **Envelope** — fields common to every observation type, and specifically the fields ever queried, sorted, or filtered on: `petId`, `type`, `occurredAt`, `attachment`. These stay top-level so the timeline/export/notification queries don't care what type an observation is.
 - **`details`** — a type-specific payload map, read but never filtered on. Firestore doesn't enforce a schema, so this costs nothing structurally; it just keeps the type-specific fields out of the shared query surface.
 
 This means adding a new observation type later (medication given, vet visit note, weight check) is just a new `type` value and a new `details` shape defined in the Flutter data layer (a sealed/freezed union per type works well so the client isn't passing raw maps around) — no new collection, no new Firestore indexes, and no security-rule changes beyond what §6 already covers. Two things this deliberately leaves undone: field-level validation ("seizure observations must have `seizureType`") is left to the Dart model layer rather than Security Rules, since there's a single trusted client codebase and no third-party writers; and this pattern is meant for point-in-time logged events, not ongoing state — something like a recurring medication *schedule* (as opposed to a log of doses given) would need its own shape rather than being forced into `observations`.

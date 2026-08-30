@@ -69,11 +69,11 @@ is the central design problem for this revamp.
 ### 5. Log an entry
 - Pick entry type *(all new)*: **seizure logging stays one tap away, never buried behind the type picker** (top priority — this is a hard requirement, not a nice-to-have), choose Seizure or Other/health note, pick which pet (defaults to last-viewed)
 - Capture a seizure: date/time, duration, seizure type, symptoms, pre-seizure signs, triggers, recovery time/behavior, rescue meds given, notes — all existing today. New: one-tap timer during an active seizure, voice dictation, photo/video attachment
-- Capture a health note (Other) *(all new, kept deliberately simple)*: what's going on (free text), when it started, notes, photo, flag for the vet. *Open question — not yet designed: which structured fields (severity, category, vitals) are worth adding later vs. just noise; don't over-build this before that research happens.*
+- Capture a health note (Other) *(all new, kept deliberately simple)*: what's going on (free text), when it started, notes, photo. *Open question — not yet designed: which structured fields (severity, category, vitals) are worth adding later vs. just noise; don't over-build this before that research happens.*
 - Save & confirm: save (existing), quick-log widget/lock screen (new), notify household on save (new)
 
 ### 6. Review history
-- See it at a glance: days since last seizure, total count, recent entries (existing); switch pet, frequency trend chart, med-adherence status, "mention at next vet visit" list, combined all-pets view (new)
+- See it at a glance: days since last seizure, total count, recent entries (existing); switch pet, frequency trend chart, med-adherence status, combined all-pets view (new)
 - Browse full history: full list (existing); filter by pet/type/date/logger, group by month (new)
 - View & edit an entry: view detail, edit, delete with confirm (existing) — *a member sees edit/delete only on entries they logged; an admin, on any entry*; compare to similar past entries (new)
 

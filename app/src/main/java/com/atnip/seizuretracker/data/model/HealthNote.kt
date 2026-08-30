@@ -14,7 +14,6 @@ data class HealthNote(
     val timestampMillis: Long = 0L,
     val notes: String = "",
     val photoUri: String = "",
-    val flaggedForVet: Boolean = true,
     val loggedByName: String = "",
     val loggedByUid: String = "",
     val createdAtMillis: Long = 0L

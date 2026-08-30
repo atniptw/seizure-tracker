@@ -195,9 +195,6 @@ Notes on specific rows:
   default pet, the pet switcher, and setting a medication reminder (which hands off to the
   phone's alarm app — product-spec §4). These are per-device preferences (`architecture.md`
   §2, the DataStore layer), not shared state, so the admin split doesn't apply.
-- **Flag-for-vet** is an edit to an observation, so a member can flag or unflag the entries
-  they logged but not someone else's. Fine for v1; the "mention at next vet visit" list is
-  still assembled from every flagged entry regardless of who flagged it.
 - Revealing the join code for the first time and adding the first other member also require
   the acting admin to hold a durable credential (§3.2) — a one-time gate at the
   solo → shared transition, on top of the admin check.

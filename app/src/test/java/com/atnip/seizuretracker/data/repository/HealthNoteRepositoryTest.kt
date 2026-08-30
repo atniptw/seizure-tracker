@@ -46,7 +46,6 @@ class HealthNoteRepositoryTest {
             val added = list[0]
             assertEquals("Limping", added.description)
             assertTrue(added.id.isNotBlank())
-            assertTrue(added.flaggedForVet)
 
             val fetched = HealthNoteRepository.getHealthNoteOnce(householdId, added.id)
             assertEquals("Limping", fetched?.description)

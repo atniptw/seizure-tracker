@@ -99,7 +99,6 @@ class AddEditHealthNoteScreenTest {
             assertEquals("Tom", saved.loggedByName)
             assertEquals("uid1", saved.loggedByUid)
             assertEquals("pet1", saved.petId)
-            assertEquals(true, saved.flaggedForVet) // defaults on, per the design handoff
         }
     }
 
@@ -110,8 +109,7 @@ class AddEditHealthNoteScreenTest {
                 petId = "pet1",
                 timestampMillis = 1_700_000_000_000L,
                 description = "Limping on back left leg",
-                notes = "seed notes",
-                flaggedForVet = false
+                notes = "seed notes"
             )
             HealthNoteRepository.addHealthNote(householdId, seeded)
             val seededWithId = viewModel.healthNotes.awaitFirst { it.isNotEmpty() }[0]
@@ -136,7 +134,6 @@ class AddEditHealthNoteScreenTest {
             val updated = viewModel.healthNotes.awaitFirst { it.isNotEmpty() && it[0].notes == "edited notes" }
             assertEquals(1, updated.size)
             assertEquals(seededWithId.id, updated[0].id)
-            assertEquals(false, updated[0].flaggedForVet)
         }
     }
 }

@@ -7,7 +7,6 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,14 +18,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material3.Button
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -45,8 +42,8 @@ import com.atnip.seizuretracker.util.DateTimeUtils
 import java.util.Calendar
 
 /**
- * Screen 3 — deliberately minimal (free text, when, notes, photo, flag-for-vet). Resist adding
- * structured fields without user research, per the design handoff's stated product priority.
+ * Screen 3 — deliberately minimal (free text, when, notes, photo). Resist adding structured
+ * fields without user research, per the design handoff's stated product priority.
  */
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
@@ -69,7 +66,6 @@ fun AddEditHealthNoteScreen(
     var timestampMillis by remember(existing) { mutableStateOf(existing?.timestampMillis ?: System.currentTimeMillis()) }
     var notes by remember(existing) { mutableStateOf(existing?.notes ?: "") }
     var photoUri by remember(existing) { mutableStateOf(existing?.photoUri ?: "") }
-    var flaggedForVet by remember(existing) { mutableStateOf(existing?.flaggedForVet ?: true) }
     var saving by remember { mutableStateOf(false) }
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
@@ -158,13 +154,6 @@ fun AddEditHealthNoteScreen(
                 Text(if (photoUri.isBlank()) "Add a photo" else "Change photo")
             }
 
-            HorizontalDivider()
-
-            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                Text("Flag for next vet visit", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                Switch(checked = flaggedForVet, onCheckedChange = { flaggedForVet = it })
-            }
-
             Spacer(Modifier.height(8.dp))
 
             PrimaryPillButton(
@@ -180,7 +169,6 @@ fun AddEditHealthNoteScreen(
                         timestampMillis = timestampMillis,
                         notes = notes,
                         photoUri = photoUri,
-                        flaggedForVet = flaggedForVet,
                         loggedByName = existing?.loggedByName ?: displayName,
                         loggedByUid = existing?.loggedByUid ?: uid,
                         createdAtMillis = existing?.createdAtMillis ?: System.currentTimeMillis()

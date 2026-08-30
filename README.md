@@ -78,7 +78,7 @@ send it to them directly to sideload.
   onset, possible triggers, recovery time and notes, whether a rescue medication was given
   (and details), free-text notes, and who logged it.
 - **Log a health note**: a lightweight entry for anything else worth telling the vet — free
-  text, when it started, notes, an optional photo, and a flag-for-vet toggle.
+  text, when it started, notes, and an optional photo.
 - **History**: every past entry, most recent first, tap through to view or edit.
 - **Pet profiles**: one per pet (name, species, breed, weight, birth date, photo) with that
   pet's list of maintenance medications (name/dose/frequency) — kept separate from the

@@ -69,7 +69,6 @@ observations/{id}
   occurredAt: Timestamp        # from timestampMillis
   createdAt:  Timestamp        # from createdAtMillis (fallback: occurredAt)
   updatedAt:  Timestamp        # = createdAt at backfill time
-  flagForVet: bool
   summary: string              # synthesized (see below)
   attachment: {...} | null
   details: { ...type-specific... }
@@ -77,11 +76,11 @@ observations/{id}
 
 - **`seizures/{id}` → `type: "seizure"`.** `details` gets `durationSeconds`, `seizureType`,
   `symptoms`, `preSeizureSigns`, `possibleTriggers`, `recoveryMinutes`, `recoveryNotes`,
-  `rescueMedGiven`, `rescueMedDetails`, `notes`. `flagForVet: true` (§9). `summary` = e.g.
+  `rescueMedGiven`, `rescueMedDetails`, `notes`. `summary` = e.g.
   `"4 min · Generalized (grand mal)"` from duration + type, `"seizure"` if both empty.
   `attachment: null` (seizures have no photo field today).
 - **`healthNotes/{id}` → `type: "note"`.** `details` gets `description`, `notes`.
-  `flagForVet` = the doc's `flaggedForVet`. `summary` = first ~60 chars of `description`.
+  `summary` = first ~60 chars of `description`.
   `attachment` = `{ type: "photo", capturedByUid: loggedByUid, localFileRef: photoUri }` if
   `photoUri` non-empty, else `null`.
 - Legacy `id` is **preserved** as the new doc id (`observations/{sameId}`), so a backfill
@@ -246,9 +245,9 @@ Former open questions, settled for a two-person closed-track deployment:
   stale device silently writing to a frozen collection cannot happen.
 - **Verification-period length** — not a fixed number of days. Gate the §7 cleanup on "both
   devices have opened the new build and history/dashboard/export look right."
-- **`flagForVet` on backfilled seizures** — set `true` (every historical seizure is
-  vet-relevant on the dashboard's "mention at next vet visit"). *Confirm, or flip to `false`
-  and flag retroactively — Tom's call; low stakes either way with two users.*
+- **`flagForVet` / "mention at next vet visit"** — dropped from the product entirely, in code
+  and in the target docs. No `flagForVet` field on the `observations` envelope, no backfill
+  for it. The vet report is the export; there's no separately curated list.
 - **`summary` wording for backfilled seizures** — `"<duration> · <type>"` (e.g. `"4 min ·
   Generalized (grand mal)"`), `"seizure"` when both are empty. The Flutter feed design may
   refine this later; the field just has to be populated now so history isn't blank.
