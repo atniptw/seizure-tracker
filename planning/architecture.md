@@ -1,34 +1,34 @@
 # Architecture — Pet Health Diary (v1)
 
-**Status:** draft for discussion · **Last updated:** 2026-08-29
-**Companion docs:** `product-spec.md` (features, entities, non-goals), `security-privacy.md` (threat model, data handling, admin/access/ownership mechanics)
+**Status:** draft for discussion · **Last updated:** 2026-08-30
+**Companion docs:** `product-spec.md` (features, entities, §4.0 "what the next release contains"), `security-privacy.md` (threat model, data handling, admin/access/ownership), `migration.md` (the Firestore-shape move), `flutter-migration.md` (the client re-platform)
 
 ## 0. This document is the target, not the shipped app
 
 This describes where the app is headed, not what runs today. The shipped app is **Kotlin +
 Jetpack Compose** (not Flutter) and already does the multi-pet / vets / health-notes
-redesign, but on a different Firestore shape. Things below that are **not yet built**:
+redesign, but on a different Firestore shape. Two sequenced plans close the gap: `migration.md`
+(the Firestore shape/rules move, on the current Kotlin app) then `flutter-migration.md` (the
+client re-platform). What's **not yet built**:
 
-- **Flutter client.** Today it's native Android/Kotlin; the Flutter port is planned in
-  `flutter-migration.md` (sequenced after `migration.md`).
+- **Flutter client** → `flutter-migration.md`, sequenced after `migration.md`. Next release
+  targets **iOS + Android**; web is post-v1.
 - **`observations` collection.** Today seizures and health notes are two collections
-  (`seizures`, `healthNotes`), not one polymorphic collection.
-- **Admin/member roles.** Today there are no roles — every member can write everything, and
-  any member can remove any member. `security-privacy.md` §8 lists the rule changes this needs.
-- **`memberIds` cache + `members` subcollection as source of truth.** Today the household
-  doc's `members` array is the sole source of truth for access (`firestore.rules`); the
-  `members/{uid}` subcollection holds display-name/auth-method metadata only, and there is
-  no Cloud Function keeping anything in sync.
-- **Cloud Functions.** None are deployed. Every Function named in this doc and in
-  `security-privacy.md` §9 is proposed, not live.
-- **`households/{id}/private/config`.** Today the plaintext join code is a `code` field on
-  the household doc; the admin-only config doc does not exist yet.
-- **Medications as a subcollection with `active`/`endDate`.** Today they're an embedded
-  array on the pet doc with no lifecycle fields; discontinuing one deletes it.
-- **Household notifications (§5) and photo/video attachments (§8).** Both are explicitly
-  **out of the next release and backlogged** — see those sections. §5 stays a design sketch;
-  §8's local-only conclusion still stands as the approach for when attachments are built. The
-  shipped app has no notification code, and its half-built `photoUri` capture was removed.
+  (`seizures`, `healthNotes`) → `migration.md §4 area 3`.
+- **Admin/member roles.** Today no roles — every member can write everything, remove anyone.
+  `security-privacy.md §8` is the rule set; `migration.md §4` is the order it lands in.
+- **`private/config` join-code relocation** and **medications as a subcollection** with
+  `active`/`endDate` → `migration.md §4` areas 2 and 4.
+- **Cloud Functions — none, and none planned.** `security-privacy.md §9` sketches a few for
+  post-v1; the `memberIds`-sync and vet-cleanup Functions this doc used to describe are
+  **removed from the target** (§3). Nothing here is a near-term dependency.
+- **Household notifications (§5) and photo/video attachments (§8)** — out of the next release
+  and backlogged. §8's local-only conclusion stands as the approach for when attachments are
+  built; the shipped app's half-built `photoUri` capture was removed.
+- **`diagnosisDate` / `archived` pet fields, history filters, the frequency-trend chart, the
+  combined all-pets dashboard view, the in-progress seizure timer, voice dictation,
+  compare-to-similar-entries** — named in `product-spec.md §4` but **not in the next release**
+  (see `product-spec.md`, "What the next release contains").
 
 ## 1. Goals that shape every decision here
 
@@ -44,77 +44,84 @@ Pulled straight from the product spec and the project's own constraints, because
 
 | Layer | Choice | Why |
 |---|---|---|
-| Client | Flutter (iOS, Android, and web for the phone-in-hand-optional dashboard case) | Already decided; one codebase for the platforms in scope. |
+| Client | Flutter — **iOS + Android** for the next release. Web is post-v1 (§10 Hosting row). | One codebase for the platforms in scope; see `flutter-migration.md`. |
 | State management | Riverpod | Plays well with Firestore streams, testable, no boilerplate-heavy alternative needed at this scale. |
 | Local persistence / offline cache | Firestore's built-in offline persistence (SQLite under the hood) | Firestore ships this for free — no separate local DB or hand-rolled sync engine to build or maintain. |
-| Backend | Firebase (Firestore, Auth, Cloud Functions, Cloud Messaging) | Serverless, generous free tier, first-class Flutter support via FlutterFire. Picked over Supabase specifically to avoid running any backend Tom would need to maintain. |
-| Auth | Firebase Auth (Google, Apple, anonymous) | Matches the spec's three sign-in options exactly, including "continue without an account" via anonymous auth. |
-| Push notifications | Firebase Cloud Messaging | For "saving notifies the rest of the household" — **post-v1, backlogged (§5)**. |
-| Media (photos/videos) | Local device storage only + OS-native share sheet (`share_plus`) | No Cloud Storage, no Blaze plan requirement, no encryption to design. **Post-v1, backlogged (§8).** |
-| PDF/CSV export | Generated on-device (Dart packages), not server-side | Avoids a Cloud Function cold-start on the export path and keeps exports working offline once data is cached locally. |
-| Hosting (web dashboard, if built) | Firebase Hosting | Free tier, same project as everything else. |
+| Backend | Firebase — **Firestore + Auth only** for the next release | Serverless, generous free tier, first-class Flutter support via FlutterFire. Cloud Functions + Cloud Messaging are post-v1 (§9); no Function is deployed or planned. Picked over Supabase to avoid running any backend Tom would maintain. |
+| Auth | Firebase Auth — **Google + anonymous** for the next release; Apple with App Store distribution (`security-privacy.md §3.1`) | Matches the spec's sign-in options, including "continue without an account" via anonymous auth. |
+| Firebase plan | **Spark (free) only** — no billing account | Firestore + Auth stay on Spark indefinitely at this scale. Deploying any Cloud Function or Cloud Storage bucket forces Blaze (§9). |
+| Push notifications | Firebase Cloud Messaging | **Post-v1, backlogged (§5)** — needs a Function, so needs Blaze. |
+| Media (photos/videos) | Local device storage only + OS-native share sheet (`share_plus`) | **Post-v1, backlogged (§8).** When built: no Cloud Storage, no encryption to design. |
+| PDF/CSV export | Generated on-device (Dart packages), not server-side | Works offline once data is cached locally; no server compute. |
+| Hosting (web dashboard) | Firebase Hosting | **Post-v1** — the next release is iOS + Android only. |
 
 ## 3. Data model
 
 Firestore is document/collection-based, not relational, so the spec's entities map to collections with denormalization in a few places to keep the seizure-logging read/write path cheap.
 
+Field names below are **illustrative**. `migration.md §3` is normative for the exact
+`details` keys and the `*Millis` vs `Timestamp` split — where the two disagree, `migration.md`
+wins (its names are the ones the shipped models use and the backfill reads).
+
 ```
 households/{householdId}
-  name, createdAt, memberIds: [uid, uid, ...]
-  # memberIds is a derived cache — see denormalization note below
-  # no plaintext join code here — it's in private/config so non-admins can't read it
+  name, createdAtMillis, members: [uid, uid, ...]
+  # `members` is the client-written array that gates access (keeps its shipped name — the
+  #   `memberIds` rename was dropped; migration.md §1). No Function keeps it in sync.
+  # no plaintext join code here — post-cleanup it's in private/config (migration.md §7)
 households/{householdId}/private/config
-  joinCode                                     # admin-only read/write (security-privacy.md §4.2)
+  joinCode                                     # admin-only read/write (security-privacy.md §8 item 7)
 households/{householdId}/members/{uid}
-  displayName, role: "admin" | "member", joinedAt, authMethod
-  # source of truth for household membership; only an admin may write another member's `role`
+  displayName, role: "admin" | "member", joinedAtMillis, authMethod
+  # source of truth for metadata + role; only an admin may write another member's `role`,
+  #   and `role` is absent-or-"member" on self-create (security-privacy.md §8 item 1)
 households/{householdId}/pets/{petId}
-  name, species, breed, weight, birthDate, diagnosisDate, archived: bool
+  name, species, breed, weightKg, birthDateMillis, createdAtMillis
+  # diagnosisDate, archived: post-v1 (product-spec.md "what the next release contains")
   # photoRef: post-v1 with the rest of attachments (§8)
-  linkedVets: [{ vetId, vetName, role }, ...]
-  # sole copy of the pet↔vet relationship — see denormalization note below
 households/{householdId}/pets/{petId}/medications/{medId}
   name, dose, frequency, notes
-  active: bool, startDate, endDate            # endDate null while active — see note below
+  active: bool, startDate, endDate            # startDate/endDate null on backfill (migration.md §3)
 households/{householdId}/vets/{vetId}
-  name, phone, notes
+  name, phone, addressOrNotes                 # shipped shape; see the vet-model note below
+households/{householdId}/petVetLinks/{linkId}
+  petId, vetId, vetName, role                 # flat collection (see denormalization note)
 households/{householdId}/observations/{observationId}
   type: "seizure" | "note" | ...              # open-ended; new types add cheaply, see below
   petId, loggedByUid, loggedByName
-  occurredAt                                  # when the thing happened
-  createdAt, updatedAt
-  summary: string                             # short human-readable line for the feed,
-                                               #   e.g. "2 min tonic-clonic"
-  # attachment: {...} | null                  # post-v1 — see §8. Not written in the next
-                                               #   release; added to the envelope when
-                                               #   attachments are built.
+  occurredAt: Timestamp                       # when the thing happened
+  createdAt, updatedAt: Timestamp
+  summary: string                             # feed line; a RENDER CACHE, recomputed on
+                                               #   every write (migration.md §3)
+  # attachment: {...} | null                  # post-v1 — see §8
   details: { ...type-specific fields... }
-    # seizure: duration, seizureType, symptoms[], preSeizureSigns[], triggers,
-    #   recoveryTime, recoveryBehavior, recoveryNotes, rescueMedGiven, rescueMedDetails, notes
+    # seizure: durationSeconds, seizureType, symptoms[], preSeizureSigns, possibleTriggers,
+    #   recoveryMinutes, recoveryNotes, rescueMedGiven, rescueMedDetails, notes
+    #   (no recoveryTime / recoveryBehavior — those were phantom; migration.md §3)
     # note: description, notes
 
 codeIndex/{code}
-  householdId, householdName                   # id + display name only (security-privacy.md §4.2)
+  householdId, householdName                   # id + display name only (security-privacy.md §8 item 8)
   # top-level, not under households/ — a joiner resolves a code to a household id before
-  #   they're a member and can read the household doc. Carries the household's display name
-  #   for the join preview and nothing else: no pet names, no vet info, no health data.
+  #   they're a member and can read the household doc. No pet names, no vet info, no health data.
 ```
 
-**Single polymorphic `observations` collection, envelope + details:** every logged thing — a seizure, a general note, and whatever gets added later (medication given, vet visit, weight check) — is something a household member observed and recorded about the pet. Rather than force each into its own collection, they all live in `observations`, discriminated by `type`. At this data volume there's no reason to give seizures special-case treatment; a single unified per-pet timeline is also simpler to query, notify on (§5), and export (§7) than merging multiple collections would be. `seizure` and `note` are the first two `type`s; more get added as new observation types come up, without restructuring anything.
+**Single polymorphic `observations` collection, envelope + details:** every logged thing — a seizure, a general note, and whatever gets added later (medication given, vet visit, weight check) — is something a household member observed and recorded about the pet. Rather than force each into its own collection, they all live in `observations`, discriminated by `type`. At this data volume there's no reason to give seizures special-case treatment; a single unified per-pet timeline is also simpler to query and export (§7) — and to notify on, if notifications are ever built (§5) — than merging multiple collections would be. `seizure` and `note` are the first two `type`s; more get added as new observation types come up, without restructuring anything.
 
 The document is split into two parts on purpose:
 
-- **Envelope** — fields common to every observation type, and specifically the fields ever queried, sorted, or filtered on: `petId`, `type`, `occurredAt` (plus `attachment` once that lands, §8). These stay top-level so the timeline/export queries don't care what type an observation is.
-- **`details`** — a type-specific payload map, read but never filtered on. Firestore doesn't enforce a schema, so this costs nothing structurally; it just keeps the type-specific fields out of the shared query surface.
+- **Envelope** — fields common to every observation type, and the ones ever sorted or filtered on: `petId`, `type`, `occurredAt`, `loggedByUid` (history filters by logger — `product-spec.md §4`), and `loggedByUid` is also rule-load-bearing (`security-privacy.md §8 item 6`). Plus `attachment` once that lands (§8). These stay top-level so the timeline/export queries don't care what type an observation is.
+- **`details`** — a type-specific payload map, read but never filtered on. Firestore doesn't enforce a schema, so this costs nothing *schema*-wise. It does cost indexes: Firestore auto-creates single-field indexes for nested map fields and array elements, so every `details.*` scalar and every `details.symptoms` element gets index entries and write-amplifies each observation. Harmless at two users, but add a single-field index **exemption** on `observations.details` (all modes off) so the "costs nothing" claim is literally true — which means the repo needs a `firestore.indexes.json` (there is none today; `firebase.json` declares only rules + emulators), added in the migration window.
 
-This means adding a new observation type later (medication given, vet visit note, weight check) is just a new `type` value and a new `details` shape defined in the Flutter data layer (a sealed/freezed union per type works well so the client isn't passing raw maps around) — no new collection, no new Firestore indexes, and no security-rule changes beyond what §6 already covers. Two things this deliberately leaves undone: field-level validation ("seizure observations must have `seizureType`") is left to the Dart model layer rather than Security Rules, since there's a single trusted client codebase and no third-party writers; and this pattern is meant for point-in-time logged events, not ongoing state — something like a recurring medication *schedule* (as opposed to a log of doses given) would need its own shape rather than being forced into `observations`.
+The read pattern is: fetch the collection with one `orderBy('occurredAt', descending: true)` and filter by `type` / pet / logger **client-side** (this is what the shipped app does across its two collections, and `flutter-migration.md §5` keeps it). So the envelope/`details` split isn't about query capability today — it's about index surface and schema evolution. Adding a new observation type later is a new `type` value + a new `details` shape in the Dart layer (a freezed union), no new collection and no rule change beyond §6. Two things deliberately left undone: field-level validation is left to the Dart model layer (one trusted client, no third-party writers); and this is for point-in-time events, not ongoing state — a recurring medication *schedule* would need its own shape.
 
 **Other denormalization and modeling choices, and why:**
 
-- **`memberIds` is a Cloud-Function-maintained cache, not a second source of truth.** The `members/{uid}` subcollection is the source of truth for household membership (role, display name, join date). The flat `memberIds` array on the household doc exists purely so the client can answer "which households am I in" at sign-in with a single `array-contains` query, without loading every household's `members` subcollection. It's kept in sync by a Cloud Function trigger on `members` writes — the same pattern used for `linkedVets` below — so there's exactly one writer of the array and no risk of a client write updating one copy and not the other.
-- **Pet↔vet links live only on the pet doc, with no reverse subcollection.** Originally modeled as a `vets/{vetId}/petLinks` subcollection with a denormalized summary mirrored onto the pet — but a household has only a handful of pets, and the client already holds the full pet list in memory for ordinary navigation (pet switcher, dashboard). So "which pets does this vet care for" is a free client-side filter over data that's already loaded, not a query that needs its own backing collection. Dropping the second collection means there's nothing to keep in sync at all — simpler than denormalizing, not just an acceptable shortcut. `vetName` is still copied onto the `linkedVets` entry (same reasoning as `loggedByName` on observations) so the pet screen doesn't need a join. One thing this doesn't handle automatically: deleting a vet won't cascade-remove it from pets' `linkedVets` arrays (Firestore never cascades), so vet deletion needs a small Cloud Function to strip stale references.
+- **Membership: the client-written `members` array on the household doc is the source of truth for *access*; `members/{uid}` is the source of truth for *metadata + role*.** There is no derived `memberIds` cache and no Function keeping anything in sync — the earlier design (a Function-maintained array so the client could answer "which households am I in" with one `array-contains` query) is dropped: the app doesn't have a multi-household picker, it resolves the household from local prefs, and a Function would force Blaze. Join and self-leave are plain array writes the rules already handle (`security-privacy.md §8 item 3`).
+- **Pet↔vet links are a flat `petVetLinks` collection** (kept from the shipped app — an earlier revision of this doc proposed folding them into a `linkedVets` array on the pet doc; that's dropped). A household has a handful of pets and the client already holds the full pet list in memory, so "which pets does this vet care for" is a free client-side filter. `vetName` is copied onto each link (same reasoning as `loggedByName` on observations) so the pet screen doesn't need a join. Deleting a vet doesn't cascade (Firestore never does), but the client deletes the matching links in a `WriteBatch` alongside the vet — no Function needed. The array version would have needed a Function for *both* vet deletes and vet renames (to fan the new name into every pet), which is why it's out.
 - **Medications carry `active`/`startDate`/`endDate` instead of being deleted when discontinued.** Without this, stopping a medication means deleting its doc — which quietly erases history that can matter later (a vet asking "was he ever on X," or spotting a correlation between a med change and seizure frequency). Discontinuing a medication is now an update (`active: false`, `endDate` set), not a delete, so the pet's full medication history stays intact. The current-medications screen just filters `active: true`; a history view can show everything. This matters more once people other than Tom are the ones managing the data — a "discontinued" state is much harder to do wrong than remembering not to delete something.
 - `loggedByName` is copied onto the observation at write time instead of joined from the member doc, so history/export screens don't need an extra read per observation, and old observations still show the right name if someone changes their display name later.
+- **Vet doc shape is the shipped one — `name`, `phone`, `addressOrNotes`** (one free-text field, not separate address/email). The design brief sketches a richer contact (email, structured address); that's a post-v1 model change, not part of the re-platform. `flutter-migration.md §5` ports the shipped shape.
 
 ## 4. Offline-first logging and sync
 
@@ -122,8 +129,9 @@ This is the architecture's central requirement, so it's worth being explicit abo
 
 - FlutterFire's Firestore SDK persists a local cache automatically (enabled by default on mobile). Reads come from cache instantly; writes are queued locally and applied optimistically to the UI.
 - The seizure form writes directly to the local cache and returns immediately — the save button doesn't wait on a network round trip. The SDK flushes queued writes to Firestore itself once connectivity returns; there's no custom retry/queue logic to write or maintain.
-- The one thing this pattern doesn't give for free: conflict handling if two people edit the *same* observation offline at the same time. The access split (`security-privacy.md` §4.1) narrows the editors of any given observation to its logger plus the household's admins, so a genuine concurrent edit is even rarer than before; last-write-wins (Firestore's default) is an acceptable trade-off for v1 rather than something to engineer around.
-- The in-progress seizure timer state lives in local app state (Riverpod), not Firestore, until the observation is saved — no reason to round-trip a running timer through the network layer at all.
+- The one thing this pattern doesn't give for free: conflict handling if two people edit the *same* observation offline at the same time. The access split (`security-privacy.md` §4.1) narrows the editors to its logger plus admins, so a genuine concurrent edit is rare; last-write-wins (Firestore's default) is an acceptable trade-off rather than something to engineer around. **But** the likelier offline conflict is delete-vs-edit — one device deletes an entry, the other edits it offline, and a `set()` would *resurrect* the deleted doc silently. So observation edits use `update()` (which fails on a missing doc), not `set()` — `migration.md §4 area 3`.
+- **Security Rules are not evaluated on the local cache.** A write a non-admin (or a since-demoted admin) queues offline is applied optimistically to the UI, then rejected on flush — the SDK drops it and the cache reverts with no error surfacing on the screen that made it. Once the role split lands, every management action has this path. Mitigation is client-side: never let a non-admin *initiate* a gated write. `flutter-migration.md §11` verifies the rejected-write behavior on a real device in Phase 3.
+- The in-progress seizure timer (a post-v1 feature) would live in local app state (Riverpod), not Firestore — no reason to round-trip a running timer through the network layer.
 
 ## 5. Household notifications
 
@@ -139,10 +147,10 @@ along with the feature. Nothing to lock in now.
 
 Enforced via Firestore Security Rules rather than a custom backend layer:
 
-- A user can **read** anything under `households/{householdId}/**` only if their uid is in that household's `memberIds`.
-- **Writes are role-split** (see `security-privacy.md` §4.1 for the product rationale, §8 for the per-collection rules): any member may create an `observations` doc and edit/delete one where `loggedByUid` is their own uid; everything else — `pets`, `medications`, `vets`, `petVetLinks`, household settings, the `members` subcollection and roles, the join code, `exportLog` — is writable only by a member with `role: "admin"` on their `members/{uid}` doc.
-- The plaintext join code lives in an **admin-only** `households/{id}/private/config` doc, not on the household doc, so a non-admin member can't read it.
-- Full mechanics of *how* someone gets added to a household, admin transfer, and account durability are specified in `security-privacy.md` (§§3–4). This section only covers how the rules enforce that.
+- A user can **read** anything under `households/{householdId}/**` only if their uid is in that household's `members` array.
+- **Writes are role-split** (see `security-privacy.md §4.1` for the rationale, `§8` for the per-collection rules and the `isMember()`/`isAdmin()` helpers — every admin gate is the *conjunction* of membership and role): any member may create an `observations` doc and edit/delete one where `loggedByUid` is their own uid; everything else — `pets`, per-pet `medications`, `vets`, `petVetLinks`, the household doc (rename), the `members` subcollection and roles, `private/config`, `exportLog` — is admin-only.
+- The plaintext join code moves to an **admin-only** `households/{id}/private/config` doc — but only after `migration.md §7` cleanup removes the legacy `code` field; until then it's still on the household doc.
+- Full mechanics of joining, admin transfer, and account durability are in `security-privacy.md §§3–4`; the order the §8 rule changes land in is `migration.md §4`.
 
 Security Rules are the entire access-control layer — no server-side authorization code to write or audit beyond the rules file itself, which fits the "no vet-facing backend surface, no backend to maintain" goal directly.
 
@@ -151,7 +159,7 @@ Security Rules are the entire access-control layer — no server-side authorizat
 Generated **on-device**, not via a Cloud Function, for two reasons: it works offline once the relevant observations are in the local cache, and it avoids paying for (or waiting on) server compute for something Dart can do directly.
 
 - CSV: straightforward serialization of the filtered observation set.
-- PDF: built with the `pdf` and `printing` Dart packages — enough for a clean report with a header, per-observation sections, and an optional trend chart rendered to an image and embedded.
+- PDF: built with the `pdf` and `printing` Dart packages — a clean report with a header and per-observation sections. (A trend chart is a post-v1 feature — when it lands it's a widget rendered to an image via `RenderRepaintBoundary.toImage` and embedded; `flutter-migration.md §4` names the charting package.)
 - Attachments are post-v1 (§8), so exports are text-only for now. When attachments land: because they're local-only, an export built on one device can only embed the media present on that device, and the exported file should say so ("N attachments not available on this device") rather than read as data loss.
 - Exporting is an **admin-only** action (`security-privacy.md` §4.1) — an export leaves the household as a file. A non-admin who needs the vet report asks an admin, or hands the vet the phone directly (which anyone can do).
 - The "log of past exports" is a small record (export type, date range, timestamp) written to `households/{householdId}/exportLog/{id}` — created only by an admin (the rules match the export gate, `security-privacy.md` §8), readable by any member so anyone can see when an export last happened.
@@ -179,21 +187,22 @@ What this buys, beyond dodging the Blaze requirement:
 
 ## 9. Cost at hobby scale
 
-Rough numbers for a handful of households (say, under 20 users, low daily write volume):
+For two people (and low volume even if it ever grew to a handful of households):
 
-- **Firestore, Auth, Hosting, FCM:** comfortably within Firebase's free Spark plan at this scale.
-- **Cloud Functions:** none are deployed or planned for the next release. The functions this doc and `security-privacy.md` §9 sketch (membership-cache sync, notification fan-out, vet-deletion cleanup, last-durable-admin re-check, join/removal notifications, recursive household delete) are all low-volume triggers that would fit the free tier's compute allowance — but deploying *any* Function requires the Blaze plan (billing account), which is why every feature that needs one is deferred.
-- **No Cloud Storage, no Cloud Functions, no Blaze plan.** Media is post-v1 (§8) and notifications are post-v1 (§5), so nothing pushes this project off the Spark plan — it stays fully free at this scale, with no billing account on file.
-- If future features ever do need Blaze (some other metered service), Firebase's pricing is per-use rather than a flat server bill, so cost scales with actual usage rather than jumping to a fixed monthly charge.
+- **Firestore + Auth:** comfortably within Firebase's free **Spark** plan.
+- **No Cloud Functions, no Cloud Storage, no Blaze plan, no billing account on file.** Every Function `security-privacy.md §9` sketches (last-durable-admin re-check, join/removal notifications, recursive household delete) belongs to a post-v1 feature, and the `memberIds`-sync and vet-cleanup Functions were removed from the target entirely (§3). Media (§8) and notifications (§5) are post-v1. Nothing pushes the project off Spark.
+- If a future feature does need Blaze, Firebase's pricing is per-use, so cost scales with usage rather than jumping to a flat monthly charge. The two candidates on the horizon are notifications (§5) and a cloud backup / PITR for the health record (`security-privacy.md §10`).
 
 ## 10. Deployment
 
-- Flutter builds to iOS/Android via standard app store pipelines (out of scope here); web build deploys to Firebase Hosting.
-- Firestore Security Rules and Cloud Functions deploy via the Firebase CLI; both are small enough to live in source control alongside the client app with no separate infra repo needed.
-- No staging backend planned for v1 — a single Firebase project, given the scale and single-maintainer context. Worth revisiting only if usage or the number of contributors grows.
+- Flutter builds to Android (Firebase App Distribution, `household` group) and iOS (TestFlight). See `flutter-migration.md §10` — iOS is new platform surface: an Apple Developer account, signing, a macOS CI runner.
+- Firestore Security Rules **and `firestore.indexes.json`** deploy via the Firebase CLI (the indexes file doesn't exist yet — added in the migration window, §3). No Functions to deploy.
+- Web (Firebase Hosting) is post-v1.
+- No staging backend — a single Firebase project, given the scale. Worth revisiting only if usage or the number of contributors grows.
 
 ## 11. Open items for other docs
 
-- Household join/invite mechanism, admin transfer, account durability → resolved in `security-privacy.md` §§3–4
-- **Anonymous-auth member stranding** → resolved in `security-privacy.md` §4.5 (sole admin must hold a durable credential; link-account nudge; `lastActiveAt` soft-detection; admin removal path)
-- Any decision to introduce a staging Firebase project or CI pipeline beyond what's in §10, if the project grows past single-maintainer hobby scale
+- Household join/invite mechanism, admin transfer, account durability → `security-privacy.md §§3–4`; the order the rule changes land → `migration.md §4`
+- **Anonymous-auth member stranding** → `security-privacy.md §4.5` (doesn't apply to the current household — both Google; retained as design for if anonymous sign-in is used)
+- The backend/data-model migration onto this shape → `migration.md`; the client re-platform → `flutter-migration.md`
+- A staging Firebase project or a wider CI pipeline, if the project grows past two-person scale

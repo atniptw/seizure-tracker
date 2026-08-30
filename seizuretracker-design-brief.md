@@ -4,6 +4,22 @@ Source: story map artifact `seizuretracker-story-map`. This condenses the backbo
 priority stack into a brief for Claude Design. Legend: **(existing)** = works in the app
 today, **(new)** = idea for the revamp, not yet built.
 
+> **Scope note (2026-08-30) — this brief's legend has drifted; `product-spec.md §4.0` is
+> authoritative on what the next release contains.**
+> - The multi-pet / shared-vet / health-note redesign this brief was written for **has since
+>   shipped** in the Kotlin app. So several items tagged "(new)" / "(all new)" below are now
+>   *live*: add & switch pets, the pet switcher, the shared many-to-many vet model, the
+>   member list + remove-member, the entry-type picker, the health-note form. Read those as
+>   "(shipped)".
+> - **Not in the next release** (design later, or not at all): Apple sign-in, biometric
+>   re-auth, pet photo / any attachment, dose reminders, "log a dose given" + med-adherence
+>   status, notifications, quick-log home/lock-screen widget, "email directly to a vet",
+>   frequency-trend chart, combined all-pets view, history filters, compare-to-similar,
+>   join-code rotation, QR-code join. The next release is shipped-app parity + admin/member
+>   roles + the join-code relocation + an export log.
+> - What **is** genuinely new and in scope: the admin/member **read-only screen variants**
+>   (the rest of this doc's main design value), and the Flutter re-platform (`flutter-migration.md`).
+
 ## Context for Claude Design
 
 Android app (Kotlin + Jetpack Compose) for logging a household's pets' seizures and health

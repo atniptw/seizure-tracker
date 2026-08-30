@@ -92,23 +92,27 @@ send it to them directly to sideload.
 - **Offline-friendly**: Firestore caches data locally, so logging works without signal; it
   syncs automatically once you're back online.
 
-## What's intentionally left out (v1)
+## What's intentionally left out
 
-- **Medication reminders/notifications** — the current-medications list is there for
-  reference and for the exported report, but there's no scheduled reminder yet. Could be
-  added later with WorkManager if useful.
+*This describes the **shipped Kotlin app**. Two of these — roles and the join-code
+relocation — are the first things `planning/migration.md` changes; the wider plan
+(`planning/migration.md` then `planning/flutter-migration.md`) and what the next release
+actually contains are in `planning/product-spec.md §4.0`.*
+
+- **Roles / permissions** — no admin vs. member distinction yet; any member can edit anything
+  and remove any other member. `planning/migration.md` adds the split.
+- **Rotating or revoking the join code** — removing a member (**Household** screen) drops
+  their access immediately, but the join code can't be regenerated in-app; changing it means
+  editing the `codeIndex` and household docs in the Firebase console. In-app rotation is a
+  post-migration follow-up (`planning/security-privacy.md §4.2`).
+- **Medication reminders** — the current-medications list is for reference and the exported
+  report; there's no scheduled reminder, and there won't be — "set an alarm" hands off to the
+  phone's own alarm app (`planning/product-spec.md §5`), not WorkManager.
 - **Photo/video attachments** — not in this version at all (the earlier half-built photo
   capture was removed). Backlogged; when built, media stays on-device rather than in Firebase
-  Storage (which needs a billing account) — see `planning/architecture.md` §8.
+  Storage — `planning/architecture.md §8`.
 - **Household notifications** — no "a new entry was just logged" push. Backlogged; needs a
-  Cloud Function, which the backend avoids for now.
-- **Roles / permissions** — there's no admin vs. member distinction yet. Any member can edit
-  anything and remove any other member. The `planning/` docs describe a role split as a
-  future change.
-- **Rotating or revoking the join code** — removing a member (**Household** screen) drops
-  their access immediately, but the join code itself can't be regenerated in-app yet, so a
-  removed member who kept the code could re-join. Changing it means editing the `codeIndex`
-  and household docs in the Firebase console for now.
+  Cloud Function, which the backend avoids.
 
 ## Costs
 

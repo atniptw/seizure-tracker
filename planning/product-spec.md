@@ -1,11 +1,13 @@
 # Product Spec — Pet Health Diary (v1)
 
-**Status:** draft for discussion · **Last updated:** 2026-08-29
-**Companion docs:** `architecture.md` (Flutter/tech stack), `security-privacy.md` (threat model, data handling, and how admin/access/ownership actually works).
+**Status:** draft for discussion · **Last updated:** 2026-08-30
+**Companion docs:** `architecture.md` (Flutter/tech stack), `security-privacy.md` (threat model, data handling, admin/access/ownership), `migration.md` + `flutter-migration.md` (how the next release gets built).
 
-> **Target, not current.** This spec describes the intended product. The shipped Kotlin app
-> already does multi-pet / health notes / vets, but has **no admin/member roles** yet (every
-> member can do everything) and no Apple sign-in. See `architecture.md §0` for the full gap list.
+> **Target, not current — and "v1" ≠ "the next release".** §4 describes the intended
+> *product*. The shipped Kotlin app already does multi-pet / health notes / vets, but has no
+> admin/member roles and no iOS. **§4.0 draws the line** between what the next release
+> actually contains (shipped-app parity + roles + join-code relocation + an export log) and
+> what §4 describes but defers to a later release. `architecture.md §0` has the full gap list.
 
 ## 1. One-liner
 
@@ -41,14 +43,17 @@ non-admin role is for someone who should only ever add entries. Full capability 
   setup (pets, vets, medications, members) is admin-only (see §2). Has one or more admins.
   Access and ownership mechanics are specified in `security-privacy.md`.
 - **Pet** — belongs to a household: name, species (dog/cat/other), breed, weight, birth date,
-  and its own list of maintenance medications. A household can have any number of pets. (A pet
-  photo is part of the backlogged attachments work — see §5.)
-- **Vet** — a shared, reusable contact per household (not per pet): name, phone, notes.
+  and its own list of maintenance medications. A household can have any number of pets.
+  Diagnosis date and a pet photo are *later* (§4.0).
+- **Vet** — a shared, reusable contact per household (not per pet): name, phone, and one
+  free-text address/notes field (the shipped shape). A richer contact (email, structured
+  address) is a *later* model change.
 - **Pet↔Vet link** — many-to-many, each link labeled with a role (General / Emergency / Neuro
   specialist / Other). One clinic can be "General" for one pet and "Emergency" for another.
 - **Seizure entry** — the detailed, high-value entry type: timestamp, duration, seizure type,
-  symptom checklist, pre-seizure signs, triggers, recovery time/behavior/notes, rescue med
-  given + details, free notes, who logged it.
+  symptom checklist, pre-seizure signs, triggers, recovery time (minutes) + recovery notes,
+  rescue med given + details, free notes, who logged it. (No separate "recovery behavior"
+  field — it's folded into recovery notes.)
 - **Health note** — a deliberately lightweight entry type for anything else worth mentioning to
   the vet: free-text description, when it started, notes. Stays unstructured on purpose (see
   non-goals, §5).
@@ -59,21 +64,49 @@ non-admin role is for someone who should only ever add entries. Full capability 
   the household. The "who logged it" on an entry also decides who may edit or delete it: its
   logger, or any admin.
 
-## 4. v1 feature scope
+## 4. Feature scope
 
-Grouped by usage flow: setup → manage pets/vets/household → log → review → export.
+### 4.0 What the next release contains
+
+The next release = **everything the shipped Kotlin app already does**, re-platformed to
+Flutter for iOS + Android (`flutter-migration.md`), on the migrated Firestore shape
+(`migration.md`), **plus** exactly what `migration.md` adds:
+
+- **Admin / member roles** — the log-and-view vs. manage split (§2, `security-privacy.md §4.1`).
+- **Join-code relocation** to an admin-only doc (`security-privacy.md §8 item 7`).
+- **An export log** — `households/{id}/exportLog` (`architecture.md §7`).
+
+**Deferred to a later release** (described in §4 below as part of the target product, but not
+built next):
+
+| Item | Where it's noted |
+|---|---|
+| Apple sign-in | with App Store distribution — `security-privacy.md §3.1` |
+| In-progress seizure timer, voice dictation | design-brief "new" items |
+| Pet `archived` (archive instead of hard-delete), `diagnosisDate` | `architecture.md §3` |
+| History filters (pet / type / date / logger), month grouping | design-brief "new" items |
+| Compare an entry to similar past ones | design-brief "new" item |
+| Frequency-trend chart (dashboard and in the PDF), combined all-pets dashboard view | design-brief "new" items; needs a charting package (`flutter-migration.md §4`) |
+| Join-code rotation | `security-privacy.md §4.2` — genuinely new feature work |
+| Photo/video attachments; household notifications | §5 (backlogged) |
+| Web dashboard | `architecture.md §2/§10` |
+| A written privacy policy, App Check, cloud backup / PITR | `security-privacy.md §10` |
+
+§4 below is grouped by usage flow: setup → manage pets/vets/household → log → review → export.
+Items marked *(later)* are in the table above.
 
 **Get set up**
-- Sign in with Google, Apple, or continue without an account (for someone who'd rather not
-  attach one, e.g. a petsitter).
+- Sign in with Google, or continue without an account (for someone who'd rather not attach
+  one, e.g. a petsitter). *Apple sign-in is later (§4.0).*
 - Create a household (pet name + species + your name), becoming its first admin, or get added
-  to an existing one by an admin. You can create and use a household solo without an account,
-  but must add Google/Apple before inviting anyone (`security-privacy.md` §3.2). The
-  mechanism for adding someone is specified in `security-privacy.md`.
+  to an existing one by an admin. The force-link-before-invite gate (`security-privacy.md
+  §3.2`) is *later* — it only matters once anonymous sign-in is in use.
 
 **Manage pets** *(editing is admin-only; everyone can view)*
-- Add, switch between, and archive multiple pets per household; a pet switcher; a default pet.
-- Edit a pet's profile: name, species, breed, weight, birth date, diagnosis date, photo.
+- Add and switch between multiple pets per household; a pet switcher; a default pet. Deleting
+  a pet hard-deletes it; *archive-instead-of-delete is later (§4.0)*.
+- Edit a pet's profile: name, species, breed, weight, birth date. *Diagnosis date and photo
+  are later (§4.0).*
 - See a pet's linked vets from its profile.
 - Maintenance medications: add/edit/remove. No in-app reminders or dose-tracking — a "set an
   alarm" action hands off to the phone's own alarm/reminder app, and marking a dose done stays
@@ -85,8 +118,9 @@ Grouped by usage flow: setup → manage pets/vets/household → log → review �
   pets; edit/remove links.
 
 **Manage household** *(admin-only)*
-- Admins: add a new member (mechanism specified in `security-privacy.md`), view the member list,
-  remove a member, rename the household, view/rotate/share the join code.
+- Admins: add a new member (mechanism in `security-privacy.md`), view the member list, remove
+  a member, rename the household, view/share the join code. *Rotating the code is later
+  (§4.0).*
 - Non-admin members: view the member list only. They cannot add or remove anyone, rename
   anything, or see the join code.
 
@@ -95,21 +129,23 @@ Grouped by usage flow: setup → manage pets/vets/household → log → review �
   must never add a tap or a delay to logging a seizure — that is a hard constraint on every
   design decision in this flow, not a preference.
 - Seizure form: date/time, duration, seizure type, a symptom checklist, pre-seizure signs,
-  possible triggers, recovery time and behavior, rescue medication given (with details), free
-  notes, and who logged it — plus a one-tap in-progress timer and voice dictation for notes, so
-  it stays fast to fill out one-handed, under stress. The triggers/notes fields are where a
-  missed or late maintenance dose gets captured if it's relevant to this seizure — there's no
-  separate dose-tracking feature (see §5); this is the one moment adherence actually matters
-  enough to write down.
+  possible triggers, recovery time, recovery notes, rescue medication given (with details),
+  free notes, and who logged it. *A one-tap in-progress timer and voice dictation are later
+  (§4.0).* The triggers/notes fields are where a missed or late maintenance dose gets captured
+  if it's relevant to this seizure — there's no separate dose-tracking feature (see §5).
 - Health note form: free text, start time, notes. Stays minimal — see §5.
 - Logging works fully offline; entries sync automatically once the device is back online.
+  **This is a hard requirement** — a rules-rejected or biometric-failed save must never block
+  the logging path (`architecture.md §4`, `security-privacy.md §6`).
 
 **Review history**
-- Dashboard: days since last seizure, total count, recent entries, a frequency trend, and a
-  combined all-pets view for multi-pet households.
-- Full history: filter by pet/type/date/logger, grouped by month.
+- Dashboard: days since last seizure, total count, recent entries. *A frequency-trend chart
+  and a combined all-pets view are later (§4.0).*
+- Full history: every entry, most recent first, grouped by month. *Filters (pet / type / date
+  / logger) are later (§4.0).*
 - View, edit, or delete an entry with confirmation (a non-admin can edit/delete only entries
-  they logged themselves; an admin, any entry); compare an entry to similar past ones.
+  they logged themselves; an admin, any entry). *"Compare to similar past entries" is later
+  (§4.0).*
 
 **Share with the vet** *(exporting is admin-only; anyone can hand the vet the phone)*
 - Two ways to share, both initiated entirely from your own phone, neither requiring the vet to
@@ -119,7 +155,8 @@ Grouped by usage flow: setup → manage pets/vets/household → log → review �
   share sheet. The app never talks to a vet's system directly, and there's no vet-facing account
   or portal to build or secure.
 - Export by time range (e.g. last 30/90 days, all time); choose whether health notes are
-  included; choose which pet(s); include a trend chart; see a log of past exports.
+  included; choose which pet(s); see a log of past exports. *Including a trend chart in the
+  export is later (§4.0).*
 
 ## 5. Non-goals for v1
 

@@ -50,10 +50,13 @@ suite, which is Node-based since rules can't be exercised from the JVM:
   `ui/household/`, `ui/seizure/`) — exercise the real repositories/ViewModels (they're `object`
   singletons with no DI seam, so mocking isn't a good fit) against the Firebase Local Emulator
   Suite via Robolectric. See `testutil/FirebaseEmulatorRule.kt`.
-- **Compose UI tests** (`ui/seizure/AddEditSeizureScreenTest.kt`, `ui/welcome/WelcomeScreenTest.kt`,
-  `ui/seizure/SeizureHistoryScreenTest.kt`, `ui/dashboard/DashboardScreenTest.kt`) — same
-  emulator-backed ViewModels, driven through the real screens with Robolectric's
-  `@GraphicsMode(NATIVE)` Compose support.
+- **Compose UI tests** — one per screen package, driven through the real screens on
+  emulator-backed ViewModels with Robolectric's `@GraphicsMode(NATIVE)` Compose support:
+  `ui/seizure/AddEditSeizureScreenTest.kt` & `SeizureListViewModelTest.kt`,
+  `ui/entry/EntryHistoryScreenTest.kt` & `QuickAddSheetTest.kt`, `ui/welcome/WelcomeScreenTest.kt`,
+  `ui/dashboard/DashboardScreenTest.kt`, `ui/healthnote/`, `ui/household/`, `ui/pet/`,
+  `ui/vet/`, `ui/export/`, `ui/settings/SettingsHubScreenTest.kt`. (Run `find app/src/test -name '*ScreenTest.kt'`
+  for the current list.)
 - **`firestore-tests/`** (Node + Jest + `@firebase/rules-unit-testing`) — tests `firestore.rules`
   itself against the emulator: household membership, the join-by-code boundary cases, `codeIndex`
   get/list/create/update/delete permissions.
