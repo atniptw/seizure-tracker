@@ -79,6 +79,7 @@ built next):
 | Item | Where it's noted |
 |---|---|
 | Apple sign-in | with App Store distribution — `security-privacy.md §3.1` |
+| Anonymous sign-in ("continue without an account") + all account-linking / stranded-identity UX | `security-privacy.md §3.1–3.3, §4.5` — the next release is Google-only; anonymous returns as one unit with its safety net |
 | In-progress seizure timer, voice dictation | design-brief "new" items |
 | Pet `archived` (archive instead of hard-delete), `diagnosisDate` | `architecture.md §3` |
 | History filters (pet / type / date / logger), month grouping | design-brief "new" items |
@@ -93,11 +94,10 @@ built next):
 Items marked *(later)* are in the table above.
 
 **Get set up**
-- Sign in with Google, or continue without an account (for someone who'd rather not attach
-  one, e.g. a petsitter). *Apple sign-in is later (§4.0).*
+- Sign in with Google. *Apple sign-in and "continue without an account" (anonymous) are both
+  later (§4.0) — the next release is Google-only.*
 - Create a household (pet name + species + your name), becoming its first admin, or get added
-  to an existing one by an admin. The force-link-before-invite gate (`security-privacy.md
-  §3.2`) is *later* — it only matters once anonymous sign-in is in use.
+  to an existing one by an admin.
 
 **Manage pets** *(editing is admin-only; everyone can view)*
 - Add and switch between multiple pets per household; a pet switcher; a default pet. Deleting

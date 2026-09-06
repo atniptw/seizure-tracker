@@ -5,11 +5,13 @@
 
 > **Scope note (2026-08-30).** The live deployment is two people, both on Google sign-in, on
 > a closed test track — no other install is possible. Several mechanisms below are retained as
-> *design* but explicitly **not built for the next release**: code rotation, all Cloud
-> Functions (§9), `lastActiveAt`, the force-link-before-invite gate, household deletion, and
-> the durability half of the last-admin invariant. Each is marked inline. The load-bearing
-> parts for the next release are the admin/member role split (§4.1) and the §8 rule changes
-> that enforce it.
+> *design* but explicitly **not built for the next release**: **anonymous sign-in itself**
+> (the next release is Google-only — `product-spec.md §4.0`) and therefore everything
+> downstream of it (§3.2 force-link gate, §3.3 linking prompts, §4.5 stranded-identity
+> handling, the durability half of the last-admin invariant, `§8 item 8`); plus code
+> rotation, all Cloud Functions (§9), `lastActiveAt`, and household deletion. Each is marked
+> inline. The load-bearing parts for the next release are the admin/member role split (§4.1)
+> and the §8 rule changes that enforce it.
 
 ## 1. What this document decides
 
@@ -18,8 +20,9 @@
 - How someone joins a household, and who controls that.
 - What a plain member can do vs. an admin (member = log-and-view; admin = everything else).
 - How admin status is held, granted, and transferred.
-- Account durability — what happens to a membership when the identity behind it goes away,
-  especially the "continue without an account" case.
+- Account durability — what happens to a membership when the identity behind it goes away.
+  (Acute for the "continue without an account" case, which is deferred out of the next
+  release — §3.1 — but the design lives here for when it returns.)
 - The threat model the Security Rules are actually defending against.
 - How the household's data is handled at rest, in transit, and on-device.
 - Deletion and retention: what a member/household/account teardown does to the data.
@@ -61,8 +64,8 @@ and the residual risk it accepts, so a future revisit has the reasoning in hand.
 ### 2.2 Trust boundaries
 
 - **Inside a household: read + log is fully trusted; managing is admin-only.** Every member
-  — admin or not, Google or anonymous — can *read* everything in the household (pets, vets,
-  medications, the whole observation history, the dashboard) and can *log* new observations.
+  — admin or not — can *read* everything in the household (pets, vets, medications, the whole
+  observation history, the dashboard) and can *log* new observations.
   Beyond that there is a deliberate split (§4.1): only admins can change pet profiles,
   medications, vets, household settings, the member roster, or export a report, and a
   non-admin can edit or delete only the entries they logged themselves. This is a
@@ -85,14 +88,14 @@ and the residual risk it accepts, so a future revisit has the reasoning in hand.
 | Actor | Goal | What stops it |
 |---|---|---|
 | A stranger with no code | Read a household's data | Security Rules: reads require `uid in members`; the household id is unguessable and the only route to it is a `codeIndex` get with the **exact** code (never listable). So the code *is* the membership capability — the rules never verify code knowledge directly; they rely on the id being secret and on the join clause only letting a caller add their own uid |
-| A stranger who guessed/brute-forced a code | Join a household | 32⁶ ≈ 1.07B codes, get-by-id only (no query), so this is online guessing against Firebase. **There is no effective per-user rate limit** — anyone with the APK can `signInAnonymously()` and script `codeIndex` gets against the project quota. The real defenses are the keyspace size and the code being useless without an admin not noticing. The named upgrade is **Firebase App Check** (device attestation, no Blaze requirement) — §10. Also: `util/HouseholdCode` uses `Random.Default`, a non-CSPRNG — the 1.07B figure assumes a cryptographic RNG; switch to `SecureRandom` / `Random.secure()` (see §10 and `flutter-migration.md`). Residual risk accepted at this scale — see §4.2 |
+| A stranger who guessed/brute-forced a code | Join a household | 32⁶ ≈ 1.07B codes, get-by-id only (no query), so this is online guessing against Firebase. **There is no effective per-user rate limit** — any authenticated session can script `codeIndex` gets against the project quota (Google-only sign-in raises the bar to "attacker holds a Google account", which is trivially cleared). The real defenses are the keyspace size and the code being useless without an admin not noticing. The named upgrade is **Firebase App Check** (device attestation, no Blaze requirement) — §10. Also: `util/HouseholdCode` uses `Random.Default`, a non-CSPRNG — the 1.07B figure assumes a cryptographic RNG; switch to `SecureRandom` / `Random.secure()` (see §10 and `flutter-migration.md`). Residual risk accepted at this scale — see §4.2 |
 | A **removed** former member | Keep reading, or re-join | Removal drops their uid from `members` — reads/writes stop on the next rule evaluation. **Code rotation is not built for the next release** (§4.2), so a removed member who kept the code can re-join at will. Acceptable now because neither current member is leaving; the mitigation until rotation ships is "don't share the code with anyone you'd later remove." |
 | A **malicious current member** | Vandalize data, exfiltrate | Largely out of scope — a member is trusted to read everything and log entries (§2.2). Admin-only writes (§4.1) limit an ordinary member to damaging the timeline via bad log entries and only their own edits/deletes; a *malicious admin* is fully out of scope. Mitigations are social (don't add people you don't trust; grant admin sparingly) plus history being recoverable only via prior exports |
 | Someone holding a member's **unlocked phone** | Read the local cache, log entries | Optional device-level app lock (§6). A determined attacker with the unlocked device or filesystem access is out of scope |
 | A **network attacker** | Intercept traffic | TLS on every Firebase connection; no app-level plaintext |
 | **Google / Firebase** as the platform | Read stored data | In scope as an acknowledged limitation: the structured data is encrypted at rest with Google-managed keys, not end-to-end. The next release stores **no media at all** (attachments are post-v1), so the highest-sensitivity asset class simply isn't in the cloud; §5.4 records the local-only stance for when it is |
 | Someone who obtains the **migration dump or service-account key** | Read/rewrite the whole record | Key and dump are gitignored and kept off any synced location; the dump is deleted after `migration.md §7` verifies. In scope as an acknowledged, time-boxed exposure during the migration only |
-| A **stranded anonymous identity** | (Not an attacker) locks a seat or an admin slot | Does not apply to the current household (both Google). §3.2 guarantees any multi-person household has a durable admin; §4.5 covers detecting and removing the stale seat if anonymous sign-in is ever used |
+| A **stranded anonymous identity** | (Not an attacker) locks a seat or an admin slot | **Cannot arise in the next release** — it's Google-only (`product-spec.md §4.0`), and Google uids survive reinstall. §3.2/§4.5 are retained as design for when anonymous sign-in ships (with its safety net) |
 
 ### 2.4 Explicitly out of scope for v1
 
@@ -115,10 +118,12 @@ Landing on a Firebase Auth uid that the rules check:
 | Method | uid durability | Intended for | Status |
 |---|---|---|---|
 | Google (Credential Manager / FlutterFire) | Survives reinstall, device wipe, new phone | Anyone willing to attach an account — the default | **Next release** |
-| Anonymous ("continue without an account") | Tied to the app install — **lost** on reinstall, "clear data", or a new device | A joiner who'd rather not attach anything (e.g. a petsitter); a solo user trying the app before they invite anyone (§3.2) | **Next release** |
+| Anonymous ("continue without an account") | Tied to the app install — **lost** on reinstall, "clear data", or a new device | A joiner who'd rather not attach anything (e.g. a petsitter); a solo user trying the app before they invite anyone (§3.2) | **Deferred** (`product-spec.md §4.0`) — the next release is Google-only. Anonymous returns as one unit with §3.2/§3.3/§4.5. |
 | Apple | Same as Google | iOS users who prefer it | **Deferred** — with App Store distribution. TestFlight internal testing (the closed iOS track, `flutter-migration.md §10`) doesn't require it; Apple's "offer Sign in with Apple if you offer another third-party sign-in" rule bites only at App Store submission. Add it then. |
 
-For the next release the durable-identity set (§3.2, §4.4) is **Google only**.
+The next release ships **Google only** — the single durable identity set (§3.2, §4.4).
+`security-privacy.md §3.2–3.3` and `§4.5` below are retained as design for when anonymous
+sign-in is added back; none of it is built next.
 
 No passwords, ever. No email/password provider — it adds a credential to secure and a reset
 flow to build for no benefit here.
@@ -130,16 +135,18 @@ and there is no way to prove "I was that person." If that lost identity was the 
 only admin, **the household is permanently locked** out of roster management: no one can add
 or remove members or promote a new admin.
 
-> **Not built for the next release.** Both current members are on Google, so the
-> force-link-before-invite hard gate below — and `§8 item 8`'s non-anonymous-`codeIndex`
-> assertion — protect a scenario that cannot arise. They're the item on this list most likely
-> to *break* a working flow (a token-refresh lag after `linkWithCredential` makes the rule
-> deny the very write it's meant to allow — see §8 item 8). Retained as design; implement
-> alongside anonymous sign-in actually being used. The plain "you can't demote/remove the
+> **Not built for the next release** — which is Google-only (`product-spec.md §4.0`), so
+> there is no anonymous uid to strand and nothing here applies. The force-link-before-invite
+> hard gate, `§8 item 8`'s non-anonymous-`codeIndex` assertion, and the §3.3 linking prompts
+> all ship together with anonymous sign-in when it's added back. (`§8 item 8` is also the one
+> most likely to *break* a working flow — a token-refresh lag after `linkWithCredential`
+> makes the rule deny the write it's meant to allow.) The plain "you can't demote/remove the
 > last admin" check (§4.4) is kept.
 
-That failure only *matters* once a second person's access depends on that admin, so the rule
-is scoped to exactly that moment rather than blocking anonymous creation outright:
+*The rest of this section is the design for when anonymous sign-in returns — none of it is in
+the next release.* That failure only *matters* once a second person's access depends on that
+admin, so the rule is scoped to exactly that moment rather than blocking anonymous creation
+outright:
 
 - **Creating and using a household solo is allowed anonymously.** Someone can sign in with
   "continue without an account", create a household, add pets, and log entries with no
@@ -233,8 +240,8 @@ Notes on specific rows:
   phone's alarm app — product-spec §4). These are per-device preferences (the local
   key–value store — `UserPrefs`/DataStore today, `shared_preferences` in Flutter), not shared
   state, so the admin split doesn't apply.
-- The force-link-before-invite gate (§3.2) is **post-v1** — both current members are Google,
-  so it protects nothing yet.
+- The force-link-before-invite gate (§3.2) is **post-v1** — the next release is Google-only
+  (`product-spec.md §4.0`), so there's no anonymous creator to gate.
 
 ### 4.2 Joining
 
@@ -322,9 +329,10 @@ coordinating in person or by text anyway. Instead:
 
 ### 4.4 Admin grant, transfer, and the last-admin invariant
 
-- The **creator** is the first admin. They may still be anonymous while solo; by the time
-  the household has a second member, §3.2's gate has forced them to link — so a shared
-  household always starts life with at least one durable admin.
+- The **creator** is the first admin. In the next release every sign-in is Google, so every
+  creator holds a durable identity from the start. (When anonymous sign-in returns: a creator
+  may be anonymous while solo, and §3.2's gate forces a link before the household can gain a
+  second member.)
 - Any admin can **promote** a member to admin or **demote** another admin, by writing the
   `role` field on that member's `members/{uid}` doc. This requires a rules change — today a
   member doc is writable only by its own uid (§8).
@@ -347,9 +355,10 @@ coordinating in person or by text anyway. Instead:
 
 ### 4.5 Stranded anonymous members
 
-**Current household:** both members are signed in with Google, so this scenario doesn't apply
-to the live deployment today. The mechanics below stay in the design because anonymous sign-in
-remains a supported path (a petsitter, a try-before-invite solo user).
+**Not in the next release.** The next release is Google-only (`product-spec.md §4.0`) and
+Google uids survive reinstall, so nothing can be stranded. The mechanics below stay in the
+design for when anonymous sign-in is added back (a petsitter, a try-before-invite solo user)
+— it ships as one unit with §3.2/§3.3 and this section.
 
 The failure `architecture.md` §11 flags: an anonymous member reinstalls or resets their
 device, loses the uid, and their `members/{uid}` entry now belongs to an identity **no
@@ -450,7 +459,7 @@ re-auth" — Flutter `local_auth`):
 | Discontinue a **medication** | `active: false` + `endDate` set — **not** a delete | Deliberate: preserves history a vet may ask about (`architecture.md` §3) |
 | Remove a **member** | uid pulled from the `members` array + `members/{uid}` deleted (order per §4.3); their observations remain | §4.3. Rotation reminder is post-v1 (§4.2) |
 | Delete a **household** | *Post-v1 — no mechanism.* Client rule stays `allow delete: if false` (§8 item 9). The recursive-delete Cloud Function is design only (§9); household teardown is not in the next release |
-| Delete my **account** | Google: unlink in settings, then Firebase Auth user deletion. Anonymous: stop using it (the uid is already ephemeral) | Authored observations stay (household data). A member who wants their *name* scrubbed from history is a manual maintainer action in v1 — §10. **Unlinking the last durable admin's provider triggers the last-admin invariant check (§4.4)** — client-only for the next release, so a request-level bypass isn't repaired. A solo anonymous creator who just stops leaves an orphaned household doc; harmless at this scale, no cleanup in v1 |
+| Delete my **account** | Unlink Google in settings, then Firebase Auth user deletion | Authored observations stay (household data). A member who wants their *name* scrubbed from history is a manual maintainer action in v1 — §10. **Unlinking the last admin's provider triggers the last-admin invariant check (§4.4)** — client-only for the next release, so a request-level bypass isn't repaired. (Once anonymous sign-in returns: a solo anonymous creator who just stops leaves an orphaned household doc — harmless at this scale, no cleanup planned.) |
 
 **Retention:** no automatic expiry. The whole value of the record is its longevity — a
 seizure-frequency trend over two years is the point. Data lives until a member deletes it or
@@ -540,7 +549,8 @@ Two things this gets right that a naive version doesn't:
    check `firebase.identities` contains `google.com` (or `apple.com`), **not** `token.email
    != null` (unreliable for Apple), and require a forced `getIdToken(refresh: true)` after
    `linkWithCredential` or the token still reads `anonymous` and the rule denies the write it
-   exists to allow.
+   exists to allow. Moot for the next release (Google-only — `product-spec.md §4.0`); ships
+   with anonymous sign-in.
 9. **`households/{id}` delete stays `if false`** — household teardown is post-v1 (§7, §9), no
    client path and no Function.
 10. **`households/{id}/exportLog/{id}` — `create: if isAdmin(hid)`, `read: if isMember(hid)`,

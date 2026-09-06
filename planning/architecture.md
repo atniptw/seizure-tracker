@@ -48,7 +48,7 @@ Pulled straight from the product spec and the project's own constraints, because
 | State management | Riverpod | Plays well with Firestore streams, testable, no boilerplate-heavy alternative needed at this scale. |
 | Local persistence / offline cache | Firestore's built-in offline persistence (SQLite under the hood) | Firestore ships this for free — no separate local DB or hand-rolled sync engine to build or maintain. |
 | Backend | Firebase — **Firestore + Auth only** for the next release | Serverless, generous free tier, first-class Flutter support via FlutterFire. Cloud Functions + Cloud Messaging are post-v1 (§9); no Function is deployed or planned. Picked over Supabase to avoid running any backend Tom would maintain. |
-| Auth | Firebase Auth — **Google + anonymous** for the next release; Apple with App Store distribution (`security-privacy.md §3.1`) | Matches the spec's sign-in options, including "continue without an account" via anonymous auth. |
+| Auth | Firebase Auth — **Google only** for the next release. Anonymous ("continue without an account") and Apple are both later (`security-privacy.md §3.1`, `product-spec.md §4.0`). | Google-only keeps the auth surface minimal and sidesteps the anonymous-identity durability problem entirely until it's built with its safety net. |
 | Firebase plan | **Spark (free) only** — no billing account | Firestore + Auth stay on Spark indefinitely at this scale. Deploying any Cloud Function or Cloud Storage bucket forces Blaze (§9). |
 | Push notifications | Firebase Cloud Messaging | **Post-v1, backlogged (§5)** — needs a Function, so needs Blaze. |
 | Media (photos/videos) | Local device storage only + OS-native share sheet (`share_plus`) | **Post-v1, backlogged (§8).** When built: no Cloud Storage, no encryption to design. |
@@ -204,6 +204,6 @@ For two people (and low volume even if it ever grew to a handful of households):
 ## 11. Open items for other docs
 
 - Household join/invite mechanism, admin transfer, account durability → `security-privacy.md §§3–4`; the order the rule changes land → `migration.md §4`
-- **Anonymous-auth member stranding** → `security-privacy.md §4.5` (doesn't apply to the current household — both Google; retained as design for if anonymous sign-in is used)
+- **Anonymous-auth member stranding** → `security-privacy.md §4.5` (moot for the next release — it's Google-only, `product-spec.md §4.0`; the design is retained for when anonymous sign-in ships with its safety net)
 - The backend/data-model migration onto this shape → `migration.md`; the client re-platform → `flutter-migration.md`
 - A staging Firebase project or a wider CI pipeline, if the project grows past two-person scale

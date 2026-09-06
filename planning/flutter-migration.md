@@ -69,7 +69,7 @@ move, and they keep the Kotlin app usable in the interim.
 | Local prefs | DataStore (`UserPrefs`) — household id, display name, active pet, a11y flags | `shared_preferences` (same key set), wrapped in a `UserPrefs` class + provider |
 | Navigation | Navigation-Compose + `Destinations` route constants | `go_router` — typed routes, same URL-ish paths |
 | Auth (Google) | Credential Manager + `googleid` | `firebase_auth` + `google_sign_in` |
-| Auth (anonymous) | `FirebaseAuth.signInAnonymously` | `FirebaseAuth.instance.signInAnonymously()` |
+| Auth (anonymous) | `FirebaseAuth.signInAnonymously` | **Deferred** — the next release is Google-only (`product-spec.md §4.0`); drop the "continue without an account" path from the auth screen and don't port `signInAnonymously` until anonymous returns with its safety net (`security-privacy.md §3.1`) |
 | PDF export | hand-rolled `android.graphics.pdf.PdfDocument` | `pdf` + `printing` packages (`architecture.md` §7) |
 | CSV export | hand-rolled string building | `csv` package (or keep it hand-rolled — it's ~40 lines) |
 | Share / save file | `FileProvider` + `ACTION_SEND` / SAF `CreateDocument` | `share_plus` (share) + `file_selector`/`path_provider` (save) |
@@ -165,8 +165,8 @@ Exposed as `Provider`s; no singletons.
 - `authRepositoryProvider`, `firestoreProvider` — leaf providers.
 - `sessionProvider` (`AsyncNotifier<SessionState>`) — mirrors `SessionViewModel`: resolves
   `FirebaseAuth` + `UserPrefs` into `Loading` / `NeedsSetup` / `Ready(householdId, uid,
-  displayName)`. Holds the `signInWithGoogle` / `signInAnonymously` / `createHousehold` /
-  `joinHousehold` / `signOut` actions.
+  displayName)`. Holds the `signInWithGoogle` / `createHousehold` / `joinHousehold` /
+  `signOut` actions. (No `signInAnonymously` — Google-only next release, §5.)
 - `householdIdProvider` — derived from `sessionProvider`, throws/guards if not `Ready`.
 - Family stream providers keyed by household id:
   `observationsProvider(householdId)`, `petsProvider`, `medicationsProvider(petId)`,
@@ -204,7 +204,7 @@ with pickers/derived state, **L** = significant logic.
 
 | Area | Shipped screen | Flutter route | Notes | Size |
 |---|---|---|---|---|
-| Onboarding | `WelcomeScreen` | `/welcome` | Sign-in (Google / continue-without) → create or join household. `sessionProvider` drives it. | M |
+| Onboarding | `WelcomeScreen` | `/welcome` | Sign-in (**Google only** — no continue-without, §5) → create or join household. `sessionProvider` drives it. | M |
 | Dashboard | `DashboardScreen` | `/` | **Parity = days-since-last-seizure, count, recent entries, single active pet** (that's all the shipped screen does). Frequency-trend chart + combined all-pets view are *later* (§1). | M |
 | History | `EntryHistoryScreen` | `/history` | **Parity = flat list, active pet, most-recent-first.** Month grouping *and* filters (pet/type/date/logger) are *later* (§1). One collection now → the eventual filters are trivial. | S |
 | Quick add | `QuickAddSheet` | bottom sheet | Entry-type picker → seizure or note. **Must not add a tap to seizure logging** (`product-spec.md §4`). | S |

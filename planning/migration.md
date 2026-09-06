@@ -253,8 +253,9 @@ plus a shape assertion (`security-privacy.md §8` items 6–8).
   `firestore-tests` cases.
 - **Household creation still mints a code**, as today. `security-privacy.md §3.2`'s "no code
   until an admin links a durable credential" and `§8 item 8`'s non-anonymous-creator
-  assertion are **rules only** for now — the app-side gate is deferred. Both current members
-  are Google, so the rule is belt-and-braces; but note that `§8 item 7`'s "admin of the
+  assertion don't apply — the next release is Google-only (`product-spec.md §4.0`), so every
+  creator is already durable. They ship with anonymous sign-in later. Note that `§8 item 7`'s
+  "admin of the
   target household" `codeIndex`-create check requires the creator's `members/{uid}` doc to
   exist *before* the `codeIndex` write, which the shipped `createHousehold` batch doesn't
   guarantee. Either reorder those writes (household doc → member doc → `codeIndex`) or move

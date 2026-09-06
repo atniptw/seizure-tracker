@@ -12,11 +12,14 @@ today, **(new)** = idea for the revamp, not yet built.
 >   member list + remove-member, the entry-type picker, the health-note form. Read those as
 >   "(shipped)".
 > - **Not in the next release** (design later, or not at all): Apple sign-in, biometric
->   re-auth, pet photo / any attachment, dose reminders, "log a dose given" + med-adherence
->   status, notifications, quick-log home/lock-screen widget, "email directly to a vet",
->   frequency-trend chart, combined all-pets view, history filters, compare-to-similar,
->   join-code rotation, QR-code join. The next release is shipped-app parity + admin/member
->   roles + the join-code relocation + an export log.
+>   re-auth, **"continue without an account" / anonymous sign-in** (a deliberate step *below*
+>   shipped-app parity — the next release is Google-only, `product-spec.md §4.0`; anonymous
+>   returns later with its account-linking safety net), pet photo / any attachment, dose
+>   reminders, "log a dose given" + med-adherence status, notifications, quick-log
+>   home/lock-screen widget, "email directly to a vet", frequency-trend chart, combined
+>   all-pets view, history filters, compare-to-similar, join-code rotation, QR-code join. The
+>   next release is shipped-app parity (minus anonymous sign-in) + admin/member roles + the
+>   join-code relocation + an export log.
 > - What **is** genuinely new and in scope: the admin/member **read-only screen variants**
 >   (the rest of this doc's main design value), and the Flutter re-platform (`flutter-migration.md`).
 
@@ -67,7 +70,7 @@ is the central design problem for this revamp.
 ## Backbone (in journey order)
 
 ### 1. Get set up
-- Sign in: Google (existing), continue without Google for a petsitter (existing), Apple sign-in (new), biometric re-auth (new)
+- Sign in: Google (existing). *Continue-without-an-account (existing), Apple sign-in (new), biometric re-auth (new) are all not in the next release — see the scope note.*
 - Create a household: enter pet + your name (existing), create (existing), add a pet photo (new), pick species — dog/cat/other (new); creator becomes the first admin. *Can be done without an account, but inviting anyone later triggers a required "add Google/Apple" prompt (new — `security-privacy.md` §3.2)*
 - Join a household: enter 6-char code (existing), enter name & join (existing), scan a QR code (new), preview pet before confirming (new); a joiner lands as a non-admin member unless an admin promotes them
 
