@@ -218,7 +218,7 @@ with pickers/derived state, **L** = significant logic.
 | Pets | `PetSwitcherSheet` | bottom sheet | Set `activePetId`. Not admin-gated (per-device pref). | S |
 | Vets | `VetsDirectoryScreen` | `/vets` | Shared directory; client-side "which pets" filter. | S |
 | Vets | `VetDetailScreen` | `/vets/new`, `/vets/:id/edit`, `/vets/new?linkPet=:petId` | Add/edit vet; the `linkToPetId` one-flow variant as a query param, not a separate route. Admin-gated. | M |
-| Vets | `LinkVetSheet` | bottom sheet | Link existing vet to a pet with a role. | S |
+| Vets | `LinkVetSheet` | bottom sheet | Link existing vet to a pet with a role. Multiple links per pet–vet pair are allowed (e.g. General + Emergency) — don't enforce uniqueness. | S |
 | Household | `HouseholdScreen` | `/household` | Member list (everyone); show/share join code + remove-member (admin only). **No rotate** (*later*, §1). | M |
 | Household | `RemoveMemberDialog` | dialog | Confirm. (Rotation prompt is *later*.) | S |
 | Settings | `SettingsHubScreen` | `/settings` | Hub: display name, active pet, links out. | S |

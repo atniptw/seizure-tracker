@@ -45,7 +45,9 @@ non-admin role is for someone who should only ever add entries. Full capability 
   free-text address/notes field (the shipped shape). A richer contact (email, structured
   address) is a *later* model change.
 - **Pet↔Vet link** — many-to-many, each link labeled with a role (General / Emergency / Neuro
-  specialist / Other). One clinic can be "General" for one pet and "Emergency" for another.
+  specialist / Other). One clinic can be "General" for one pet and "Emergency" for another —
+  and a single pet–vet pair may carry more than one link (the same clinic tagged both General
+  and Emergency for one pet is fine; the link UI must not enforce one role per pair).
 - **Seizure entry** — the detailed, high-value entry type: timestamp, duration, seizure type,
   symptom checklist, pre-seizure signs, triggers, recovery time (minutes) + recovery notes,
   any medication given around the seizure + details, free notes, who logged it. (No separate
