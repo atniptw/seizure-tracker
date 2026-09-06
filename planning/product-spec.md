@@ -81,7 +81,7 @@ built next):
 | Apple sign-in | with App Store distribution — `security-privacy.md §3.1` |
 | Anonymous sign-in ("continue without an account") + all account-linking / stranded-identity UX | `security-privacy.md §3.1–3.3, §4.5` — the next release is Google-only; anonymous returns as one unit with its safety net |
 | In-progress seizure timer, voice dictation | design-brief "new" items |
-| Pet `archived` (archive instead of hard-delete), `diagnosisDate` | `architecture.md §3` |
+| Pet `diagnosisDate` | `architecture.md §3` |
 | History filters (pet / type / date / logger), month grouping | design-brief "new" items |
 | Compare an entry to similar past ones | design-brief "new" item |
 | Frequency-trend chart (dashboard and in the PDF), combined all-pets dashboard view | design-brief "new" items; needs a charting package (`flutter-migration.md §4`) |
@@ -105,8 +105,11 @@ Items marked *(later)* are in the table above.
   later.*
 
 **Manage pets** *(editing is admin-only; everyone can view)*
-- Add and switch between multiple pets per household; a pet switcher; a default pet. Deleting
-  a pet hard-deletes it; *archive-instead-of-delete is later (§4.0)*.
+- Add and switch between multiple pets per household; a pet switcher; a default pet.
+- **Archive, don't delete.** Removing a pet archives it: it drops out of the switcher and the
+  active views, but its entire history and medications are kept and still appear in an
+  all-time export. A true delete is offered only for a pet with no entries (the fat-fingered
+  add). This replaces the shipped hard-delete, which orphaned a pet's history.
 - Edit a pet's profile: name, species, breed, weight, birth date. *Diagnosis date and photo
   are later (§4.0).*
 - See a pet's linked vets from its profile.

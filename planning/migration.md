@@ -86,10 +86,15 @@ window ends at the first write from the new build (§4); after that the path is 
 
 **Not changed by this migration** (kept at parity with the shipped app; several appear as
 "v1" in `product-spec.md §4` but move to a later release — see `product-spec.md` "What the
-next release contains"): pet `archived` / `diagnosisDate` fields, history filters, the
-frequency-trend chart, the combined all-pets dashboard view, the in-progress seizure timer,
-voice dictation, compare-to-similar-entries, Apple sign-in. Deleting a pet still hard-deletes
-(and orphans its observations — a pre-existing quirk, not introduced here).
+next release contains"): pet `diagnosisDate` field, history filters, the frequency-trend
+chart, the combined all-pets dashboard view, the in-progress seizure timer, voice dictation,
+compare-to-similar-entries, Apple sign-in.
+
+**Pet `archived` (new — in the next release).** Add `archived: bool` to every pet doc,
+backfilled to `false` (area 4). The client switches "remove pet" from a hard-delete to
+setting `archived: true` (a true delete stays available only for a pet with zero
+observations). This closes the shipped-app quirk where deleting a pet orphaned its
+observations. No rules change — a pet write is already admin-only (`security-privacy.md §8`).
 
 ### `observations` envelope, and how each legacy doc maps
 
@@ -295,7 +300,8 @@ auth.uid`, `update/delete: if (admin || author) && request.resource.data.loggedB
 resource.data.loggedByUid` (authorship is immutable — `security-privacy.md §8` item 5). Keep
 the `seizures` / `healthNotes` rules in place until §7.
 
-**4. Medications subcollection.** Backfill: for each pet, for each entry in the embedded
+**4. Medications subcollection + pet `archived`.** Backfill, per pet: (a) set `archived:
+false` on the pet doc if the field is absent; (b) for each entry in the embedded
 `medications` array, create `pets/{petId}/medications/{hashId}` with the fields + `active:
 true`, `startDate: null` (see §3 table — legacy start dates are genuinely unknown; the UI
 renders null as "start date not recorded"), `endDate: null`.
@@ -309,10 +315,13 @@ renders null as "start date not recorded"), `endDate: null`.
 - New medications created by the app use Firestore auto-ids — the hash is a backfill device
   only, never an identity scheme, never re-derived.
 
-App: `Pet` drops the embedded `medications`; `PetRepository` reads the subcollection;
-"discontinue" becomes `active: false` + `endDate` set instead of a delete; current-meds UI
-filters `active == true`. Rules: `pets/{petId}/medications/{medId}` — `read: if member;
-write: if admin` (its own nested `match`, not covered by the `pets` rule).
+App: `Pet` drops the embedded `medications` and gains `archived: bool`; `PetRepository` reads
+the subcollection; "discontinue" a medication becomes `active: false` + `endDate` set instead
+of a delete; current-meds UI filters `active == true`. "Remove pet" sets `archived: true`
+(true delete only for a pet with no observations); pet lists / the switcher filter
+`archived == false`. Rules: `pets/{petId}/medications/{medId}` — `read: if member; write: if
+admin` (its own nested `match`, not covered by the `pets` rule); the pet doc's own
+admin-only write rule already covers the `archived` flip.
 
 **5. Export log.** No backfill (new empty collection). App: on a successful export, an
 admin's device writes one `{ type, rangeStart, rangeEnd, petIds, createdAt }` doc; export
@@ -459,6 +468,9 @@ Settled for a two-person closed-track deployment:
   aborts on a per-pet count mismatch (§4 area 4).
 - **Medication `startDate`** — backfills to `null`; legacy start dates are genuinely unknown
   and inferring one would fabricate clinical history.
+- **Pet `archived`** — backfills to `false` (§4 area 4); enables archive-instead-of-delete
+  (`product-spec.md §4`), closing the shipped quirk where deleting a pet orphaned its
+  observations. Verification asserts every pet doc has the field after backfill.
 - **`members` → `memberIds` rename** — **dropped.** The array keeps its name (§1).
 - **Code rotation** — **not built here.** Deferred to a follow-up PR (§1, §4 area 2).
 - **Min-version gate** — not needed and not built. Two devices that update together.

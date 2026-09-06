@@ -23,8 +23,9 @@ describes as part of the target product but that don't ship next):
 - **Apple sign-in** — with App Store distribution (`security-privacy.md §3.1`). TestFlight
   internal testing doesn't require it.
 - In-progress seizure timer, voice dictation.
-- Pet `archived` / `diagnosisDate`; history filters; compare-to-similar; the frequency-trend
+- Pet `diagnosisDate`; history filters; compare-to-similar; the frequency-trend
   chart (dashboard + PDF) and the combined all-pets dashboard view.
+  (Pet `archived` / archive-instead-of-delete **is** in scope — `product-spec.md §4`.)
 - Join-code rotation, QR-code join.
 - Photo/video attachments (`architecture.md §8`), household notifications
   (`architecture.md §5`), web dashboard (`architecture.md §2/§10`).
@@ -118,8 +119,9 @@ field names and types** — where it and `architecture.md §3` disagree, `migrat
   `createdAtMillis`. No `code` field after `migration.md §7` cleanup.
 - `MemberProfile` — `uid`, `displayName`, `authMethod`, `role` (`admin`|`member`),
   `joinedAtMillis`. **No `lastActiveAt`** — post-v1 (`migration.md §3`).
-- `Pet` — `name`, `species`, `breed`, `weightKg`, `birthDateMillis`, `createdAtMillis`. No
-  embedded `medications`, no `photoUri`, **no `diagnosisDate` / `archived`** (post-v1, §1).
+- `Pet` — `name`, `species`, `breed`, `weightKg`, `birthDateMillis`, `createdAtMillis`,
+  `archived: bool` (archive replaces hard-delete — `product-spec.md §4`, `migration.md §4`).
+  No embedded `medications`, no `photoUri`, **no `diagnosisDate`** (post-v1, §1).
 - `Medication` — its own doc: `name`, `dose`, `frequency`, `notes`, `active`, `startDate`,
   `endDate` (`startDate`/`endDate` null on the backfilled docs).
 - `Vet` — `name`, `phone`, `addressOrNotes` (the shipped shape — `architecture.md §3` note).
@@ -211,7 +213,7 @@ with pickers/derived state, **L** = significant logic.
 | Seizure | `AddEditSeizureScreen` | `/observation/seizure/new`, `/observation/:id/edit` | Biggest form: date/time, duration, type dropdown, symptom chips, recovery, medication-given toggle, notes. Edits `update()` not `set()`. | L |
 | Detail | `SeizureDetailScreen` → **`ObservationDetailScreen`** | `/observation/:id` | Read-only detail, per-type body (there's no note-detail screen today — unify rather than port the asymmetry). Compare-to-similar is *later* (§1). | S |
 | Health note | `AddEditHealthNoteScreen` | `/observation/note/new/:petId`, `/observation/:id/edit` | Deliberately minimal: text, when, notes. | S |
-| Pets | `ManagePetsScreen` | `/pets` | List + add + **hard-delete** (parity; archive-instead is *later*, §1). Admin-gated. | S |
+| Pets | `ManagePetsScreen` | `/pets` | List (filter `archived == false`) + add + **archive** ("remove" sets `archived: true`; a true delete only for a pet with no observations). Admin-gated. | S |
 | Pets | `AddEditPetScreen` | `/pets/new`, `/pets/:id/edit` | Profile form + **the medications-subcollection CRUD** (add / edit / discontinue via `active`+`endDate` — no shipped equivalent) + linked vets. Admin-gated. | **L** |
 | Pets | `PetSwitcherSheet` | bottom sheet | Set `activePetId`. Not admin-gated (per-device pref). | S |
 | Vets | `VetsDirectoryScreen` | `/vets` | Shared directory; client-side "which pets" filter. | S |

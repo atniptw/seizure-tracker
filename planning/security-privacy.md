@@ -455,6 +455,7 @@ re-auth" — Flutter `local_auth`):
 | Action | What happens | Notes |
 |---|---|---|
 | Delete an **observation** | Hard delete of the Firestore doc | Only the member who logged it, or an admin (§4.1). Last-write-wins, no soft-delete/tombstone in v1 (`architecture.md` §4). **Recoverable only from a prior export** — no backup/PITR (§2.4). Edits use `update()` not `set()` so a stale offline edit can't resurrect a deleted doc (`migration.md §4 area 3`) |
+| Remove a **pet** | `archived: true` — **not** a delete (`product-spec.md §4`, `migration.md §4 area 4`). A true delete is allowed only for a pet with no observations | Deliberate: a hard-delete orphaned the pet's whole seizure history (the shipped-app quirk this closes). Archived pets stay out of the switcher but in an all-time export. Admin-only |
 | Discontinue a **medication** | `active: false` + `endDate` set — **not** a delete | Deliberate: preserves history a vet may ask about (`architecture.md` §3) |
 | Remove a **member** | uid pulled from the `members` array + `members/{uid}` deleted (order per §4.3); their observations remain | §4.3. Rotation reminder is post-v1 (§4.2) |
 | Delete a **household** | *Post-v1 — no mechanism.* Client rule stays `allow delete: if false` (§8 item 9). The recursive-delete Cloud Function is design only (§9); household teardown is not in the next release |

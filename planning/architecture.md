@@ -25,10 +25,11 @@ client re-platform). What's **not yet built**:
 - **Household notifications (§5) and photo/video attachments (§8)** — out of the next release
   and backlogged. §8's local-only conclusion stands as the approach for when attachments are
   built; the shipped app's half-built `photoUri` capture was removed.
-- **`diagnosisDate` / `archived` pet fields, history filters, the frequency-trend chart, the
-  combined all-pets dashboard view, the in-progress seizure timer, voice dictation,
+- **`diagnosisDate` pet field, history filters, the frequency-trend chart, the combined
+  all-pets dashboard view, the in-progress seizure timer, voice dictation,
   compare-to-similar-entries** — named in `product-spec.md §4` but **not in the next release**
-  (see `product-spec.md`, "What the next release contains").
+  (see `product-spec.md`, "What the next release contains"). *(The `archived` pet field —
+  and archive-instead-of-hard-delete — **is** in the next release, `product-spec.md §4`.)*
 
 ## 1. Goals that shape every decision here
 
@@ -77,7 +78,9 @@ households/{householdId}/members/{uid}
   #   and `role` is absent-or-"member" on self-create (security-privacy.md §8 item 1)
 households/{householdId}/pets/{petId}
   name, species, breed, weightKg, birthDateMillis, createdAtMillis
-  # diagnosisDate, archived: post-v1 (product-spec.md "what the next release contains")
+  archived: bool           # next release — archive replaces hard-delete (product-spec.md §4);
+                           #   backfills to false (migration.md §4)
+  # diagnosisDate: post-v1 (product-spec.md "what the next release contains")
   # photoRef: post-v1 with the rest of attachments (§8)
 households/{householdId}/pets/{petId}/medications/{medId}
   name, dose, frequency, notes
