@@ -235,9 +235,9 @@ Notes on specific rows:
   snapshotted onto each observation at write time (`architecture.md §3`), so a later name
   change wouldn't rewrite history anyway — which removes the main argument against allowing
   the edit. See §10.
-- **Not a household write, so any member can do it for themselves:** picking the active /
-  default pet, the pet switcher, and setting a medication reminder (which hands off to the
-  phone's alarm app — product-spec §4). These are per-device preferences (the local
+- **Not a household write, so any member can do it for themselves:** the pet switcher (which
+  sets the per-device active pet — there's no separate "default pet"), and setting a
+  medication reminder (which hands off to the phone's alarm app — product-spec §4). These are per-device preferences (the local
   key–value store — `UserPrefs`/DataStore today, `shared_preferences` in Flutter), not shared
   state, so the admin split doesn't apply.
 - The force-link-before-invite gate (§3.2) is **post-v1** — the next release is Google-only

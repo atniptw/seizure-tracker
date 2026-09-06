@@ -76,7 +76,7 @@ is the central design problem for this revamp.
 - Join a household: enter 6-char code (existing), enter name & join (existing); a joiner lands as a non-admin member unless an admin promotes them. *Scan a QR code and preview-before-confirming are both not in the next release — see the scope note.*
 
 ### 2. Manage pets — *admin-only actions; members get a read-only view*
-- Add & switch pets *(all new)*: add a pet with name + species, switch via a pet switcher, set a default pet, archive/remove a pet — *switching pets and setting your own default work for everyone (per-device); adding/archiving is admin-only*
+- Add & switch pets *(all new)*: add a pet with name + species, switch via a pet switcher, archive/remove a pet — *switching the active pet is per-device and works for everyone (no separate "default pet" setting); adding/archiving is admin-only*
 - Pet info: edit name/species/breed/weight (existing), add photo (new), birth date & diagnosis date (new), see this pet's linked vets (new) — *editing is admin-only; everyone sees the profile and the linked vets*
 - Medications: add/edit/remove (existing), dose reminders (new), log that a dose was actually given (new) — *the medication list is admin-managed; setting a reminder and logging a dose-given are available to everyone (a dose-given is just an entry)*
 
@@ -87,7 +87,7 @@ is the central design problem for this revamp.
 - Household members: view & copy join code — *admins only; a member never sees the code*, see who's in the household (new) — *everyone*, remove a member (new) — *admins remove others; anyone can leave themselves*, rename household/pet after setup (new) — *admins only*
 
 ### 5. Log an entry
-- Pick entry type *(all new)*: **seizure logging stays one tap away, never buried behind the type picker** (top priority — this is a hard requirement, not a nice-to-have), choose Seizure or Other/health note, pick which pet (defaults to last-viewed)
+- Pick entry type *(all new)*: **seizure logging stays one tap away, never buried behind the type picker** (top priority — this is a hard requirement, not a nice-to-have), choose Seizure or Other/health note, pick which pet (defaults to the active pet)
 - Capture a seizure: date/time, duration, seizure type, symptoms, pre-seizure signs, triggers, recovery time/behavior, any meds given, notes — all existing today. New: one-tap timer during an active seizure, voice dictation. *(Photo/video attachment: backlogged — post-v1.)*
 - Capture a health note (Other) *(all new, kept deliberately simple)*: what's going on (free text), when it started, notes. *Open question — not yet designed: which structured fields (severity, category, vitals) are worth adding later vs. just noise; don't over-build this before that research happens. Photo attachment is backlogged — post-v1.*
 - Save & confirm: save (existing), quick-log widget/lock screen (new). *(Notify household on save: backlogged — post-v1.)*

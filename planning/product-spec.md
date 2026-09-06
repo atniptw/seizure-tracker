@@ -105,7 +105,9 @@ Items marked *(later)* are in the table above.
   later.*
 
 **Manage pets** *(editing is admin-only; everyone can view)*
-- Add and switch between multiple pets per household; a pet switcher; a default pet.
+- Add and switch between multiple pets per household with a pet switcher. The app tracks one
+  **active pet** — per device, remembered between launches; there's no separate "default pet"
+  setting. Switching is not admin-gated (it's a per-device preference).
 - **Archive, don't delete.** Removing a pet archives it: it drops out of the switcher and the
   active views, but its entire history and medications are kept and still appear in an
   all-time export. A true delete is offered only for a pet with no entries (the fat-fingered
@@ -130,7 +132,7 @@ Items marked *(later)* are in the table above.
   anything, or see the join code.
 
 **Log an entry** — the core loop, and the one place speed matters most
-- Pick entry type (Seizure / Health note), then which pet (defaults to last-viewed). This picker
+- Pick entry type (Seizure / Health note), then which pet (defaults to the active pet). This picker
   must never add a tap or a delay to logging a seizure — that is a hard constraint on every
   design decision in this flow, not a preference.
 - Seizure form: date/time, duration, seizure type, a symptom checklist, pre-seizure signs,
