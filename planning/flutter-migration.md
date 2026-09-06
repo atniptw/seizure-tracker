@@ -132,9 +132,10 @@ field names and types** — where it and `architecture.md §3` disagree, `migrat
 - **`Observation`** — the envelope: `id`, `type`, `petId`, `loggedByUid`, `loggedByName`,
   `occurredAt`, `createdAt`, `updatedAt`, `summary`, `details`.
 - **`ObservationDetails`** — `freezed` union: `.seizure(durationSeconds, seizureType,
-  symptoms, preSeizureSigns, possibleTriggers, recoveryMinutes, recoveryNotes, rescueMedGiven,
-  rescueMedDetails, notes)` and `.note(description, notes)`. Field names per `migration.md §3`
-  — there is no `recoveryTime` / `recoveryBehavior` / `triggers` / `duration` / `type`.
+  symptoms, preSeizureSigns, possibleTriggers, recoveryMinutes, recoveryNotes, medicationGiven,
+  medicationDetails, notes)` and `.note(description, notes)`. Field names per `migration.md §3`
+  — there is no `recoveryTime` / `recoveryBehavior` / `triggers` / `duration` / `type`, and no
+  `rescueMed*` (one medication concept — `migration.md §3` renames it at backfill).
 - **`summary`** — the client may drop this field and format the feed line at render time from
   `type` + `details` (no cache to invalidate); or keep it and recompute on every write
   (`migration.md §3`). Render-time is simpler — recommend that.
@@ -207,7 +208,7 @@ with pickers/derived state, **L** = significant logic.
 | Dashboard | `DashboardScreen` | `/` | **Parity = days-since-last-seizure, count, recent entries, single active pet** (that's all the shipped screen does). Frequency-trend chart + combined all-pets view are *later* (§1). | M |
 | History | `EntryHistoryScreen` | `/history` | **Parity = flat list, active pet, most-recent-first.** Month grouping *and* filters (pet/type/date/logger) are *later* (§1). One collection now → the eventual filters are trivial. | S |
 | Quick add | `QuickAddSheet` | bottom sheet | Entry-type picker → seizure or note. **Must not add a tap to seizure logging** (`product-spec.md §4`). | S |
-| Seizure | `AddEditSeizureScreen` | `/observation/seizure/new`, `/observation/:id/edit` | Biggest form: date/time, duration, type dropdown, symptom chips, recovery, rescue-med toggle, notes. Edits `update()` not `set()`. | L |
+| Seizure | `AddEditSeizureScreen` | `/observation/seizure/new`, `/observation/:id/edit` | Biggest form: date/time, duration, type dropdown, symptom chips, recovery, medication-given toggle, notes. Edits `update()` not `set()`. | L |
 | Detail | `SeizureDetailScreen` → **`ObservationDetailScreen`** | `/observation/:id` | Read-only detail, per-type body (there's no note-detail screen today — unify rather than port the asymmetry). Compare-to-similar is *later* (§1). | S |
 | Health note | `AddEditHealthNoteScreen` | `/observation/note/new/:petId`, `/observation/:id/edit` | Deliberately minimal: text, when, notes. | S |
 | Pets | `ManagePetsScreen` | `/pets` | List + add + **hard-delete** (parity; archive-instead is *later*, §1). Admin-gated. | S |

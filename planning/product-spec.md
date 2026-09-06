@@ -19,10 +19,9 @@ mid-seizure never has to think.
 
 | Persona | Role | Needs |
 |---|---|---|
-| Admin | Manages the household — pets, vets, medications, members, exports, the join code; a household can have more than one admin | Fast logging, full history, exports, full control over the household's setup and who's in |
-| Member (partner, family member who co-manages) | Should be an **admin** — see above | — |
-| Member / petsitter / occasional logger | Non-admin: reads the whole household and logs entries (and edits/deletes their own), but can't change pets/vets/medications, household settings, the roster, the join code, or export | Easy to bring in for a stretch, easy to take back out; can log without being able to break the household's setup |
-| Vet (indirect) | Never opens the app | Receives a report (PDF/CSV, or later a shared link) |
+| Owner / co-owner (a couple, a family managing their pets together) | **Admin** — manages the household: pets, vets, medications, members, exports, the join code. A household can have more than one admin, and anyone who co-manages the pets should be one. | Fast logging, full history, exports, full control over the household's setup and who's in |
+| Petsitter / occasional logger | **Non-admin member** — reads the whole household and logs entries (and edits/deletes their own), but can't change pets/vets/medications, household settings, the roster, the join code, or export | Easy to bring in for a stretch, easy to take back out; can log without being able to break the household's setup |
+| Vet (indirect) | Never opens the app | Receives a report the owner hands over — a PDF/CSV export, or the owner's phone in person |
 
 **A non-admin member is log-and-view only.** They see everything (no data is hidden) and can
 log observations, including fixing or deleting ones they logged — but every management
@@ -33,17 +32,14 @@ non-admin role is for someone who should only ever add entries. Full capability 
 
 ## 3. Core entities
 
-- **Household** — the shared record a group of people belong to. Everyone in it sees every pet,
-  vet, and entry in that household — access is never scoped to a subset of pets. One household
-  is a family's whole set of pets, not one pet's care circle: e.g. a couple's household holds
-  every pet they own, and anyone added to it (including a petsitter only there for one animal)
-  sees all of them. That's intentional — someone who's around the house may notice something
-  worth a quick health note on a pet they weren't technically there for, and there's no benefit
-  to hiding that pet from them. *Seeing* everything is universal; *changing* the household's
-  setup (pets, vets, medications, members) is admin-only (see §2). Has one or more admins.
-  Access and ownership mechanics are specified in `security-privacy.md`.
+- **Household** — the shared record a group of people belong to, covering a family's whole set
+  of pets rather than one pet's care circle. Everyone in it sees every pet, vet, and entry —
+  access is never scoped to a subset of pets, so a petsitter added for one animal still sees
+  them all. *Seeing* everything is universal; *changing* the setup (pets, vets, medications,
+  members) is admin-only (see §2). Has one or more admins; access and ownership mechanics are
+  in `security-privacy.md`.
 - **Pet** — belongs to a household: name, species (dog/cat/other), breed, weight, birth date,
-  and its own list of maintenance medications. A household can have any number of pets.
+  and its own list of medications. A household can have any number of pets.
   Diagnosis date and a pet photo are *later* (§4.0).
 - **Vet** — a shared, reusable contact per household (not per pet): name, phone, and one
   free-text address/notes field (the shipped shape). A richer contact (email, structured
@@ -52,13 +48,14 @@ non-admin role is for someone who should only ever add entries. Full capability 
   specialist / Other). One clinic can be "General" for one pet and "Emergency" for another.
 - **Seizure entry** — the detailed, high-value entry type: timestamp, duration, seizure type,
   symptom checklist, pre-seizure signs, triggers, recovery time (minutes) + recovery notes,
-  rescue med given + details, free notes, who logged it. (No separate "recovery behavior"
-  field — it's folded into recovery notes.)
+  any medication given around the seizure + details, free notes, who logged it. (No separate
+  "recovery behavior" field — it's folded into recovery notes.)
 - **Health note** — a deliberately lightweight entry type for anything else worth mentioning to
   the vet: free-text description, when it started, notes. Stays unstructured on purpose (see
   non-goals, §5).
-- **Maintenance medication** — belongs to a pet, not an entry: name/dose/frequency/notes. Distinct
-  from a rescue med given during a seizure, which is recorded on that seizure entry instead.
+- **Medication** — belongs to a pet, not an entry: name/dose/frequency/notes. One list per pet,
+  no medication categories. If a medication is given around a seizure, that's noted on the
+  seizure entry itself, not tracked here.
 - **Member profile** — display name, sign-in method, and role (admin / non-admin) per
   household member, for showing "logged by X", the member list, and gating who can manage
   the household. The "who logged it" on an entry also decides who may edit or delete it: its
@@ -108,7 +105,7 @@ Items marked *(later)* are in the table above.
 - Edit a pet's profile: name, species, breed, weight, birth date. *Diagnosis date and photo
   are later (§4.0).*
 - See a pet's linked vets from its profile.
-- Maintenance medications: add/edit/remove. No in-app reminders or dose-tracking — a "set an
+- Medications: add/edit/remove. No in-app reminders or dose-tracking — a "set an
   alarm" action hands off to the phone's own alarm/reminder app, and marking a dose done stays
   in that same app rather than asking the person to also come log it here.
 
@@ -129,10 +126,10 @@ Items marked *(later)* are in the table above.
   must never add a tap or a delay to logging a seizure — that is a hard constraint on every
   design decision in this flow, not a preference.
 - Seizure form: date/time, duration, seizure type, a symptom checklist, pre-seizure signs,
-  possible triggers, recovery time, recovery notes, rescue medication given (with details),
-  free notes, and who logged it. *A one-tap in-progress timer and voice dictation are later
-  (§4.0).* The triggers/notes fields are where a missed or late maintenance dose gets captured
-  if it's relevant to this seizure — there's no separate dose-tracking feature (see §5).
+  possible triggers, recovery time, recovery notes, any medication given around the seizure
+  (with details), free notes, and who logged it. *A one-tap in-progress timer and voice
+  dictation are later (§4.0).* The triggers/notes fields are where a missed or late dose gets
+  captured if it's relevant to this seizure — there's no separate dose-tracking feature (see §5).
 - Health note form: free text, start time, notes. Stays minimal — see §5.
 - Logging works fully offline; entries sync automatically once the device is back online.
   **This is a hard requirement** — a rules-rejected or biometric-failed save must never block

@@ -280,7 +280,7 @@ Changes from today:
   data. This is a conscious, minimal relaxation of today's index doc, which holds the
   household id and nothing else (`firestore.rules`): a household nickname is low-sensitivity,
   and anyone holding the code was given it on purpose. `architecture.md` §3 documents the
-  id + display-name shape as the target. Pet names and photos are *not* in the index; a fuller preview (pets)
+  id + display-name shape as the target. Pet names are *not* in the index; a fuller preview (pets)
   only renders after the join write lands, with a "this isn't my household — leave" escape
   hatch.
 

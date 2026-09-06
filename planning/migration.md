@@ -108,14 +108,16 @@ observations/{id}
 
 This field list is **normative** — where `architecture.md §3` or `flutter-migration.md §5`
 use different names for the seizure `details` fields, they're illustrative and defer to the
-names here (which are the ones the shipped `Seizure` model actually uses and the backfill
-actually reads).
+names here. Except where noted, these match the shipped `Seizure` model and are what the
+backfill writes.
 
 - **`seizures/{id}` → `type: "seizure"`.** `details` gets `durationSeconds`, `seizureType`,
   `symptoms` (list), `preSeizureSigns` (string), `possibleTriggers` (string),
-  `recoveryMinutes`, `recoveryNotes`, `rescueMedGiven`, `rescueMedDetails`, `notes`. There is
-  **no** `recoveryBehavior` / `recoveryTime` field — those names in `architecture.md §3` and
-  `product-spec.md §3` are phantom; no such data exists. `summary` = e.g.
+  `recoveryMinutes`, `recoveryNotes`, `medicationGiven`, `medicationDetails`, `notes`.
+  `medicationGiven` / `medicationDetails` are **renamed at backfill** from the shipped model's
+  `rescueMedGiven` / `rescueMedDetails` — there is one medication concept, no "rescue" vs
+  other category. There is **no** `recoveryBehavior` / `recoveryTime` field — those names in
+  `architecture.md §3` and `product-spec.md §3` are phantom; no such data exists. `summary` = e.g.
   `"4 min · Generalized (grand mal)"` from duration + type, `"seizure"` if both empty.
 - **`healthNotes/{id}` → `type: "note"`.** `details` gets `description`, `notes`.
   `summary` = first ~60 chars of `description`. Any legacy `photoUri` value is dropped.
@@ -271,6 +273,11 @@ every `ui/*` package that touches entries.
   edit; against `observations` that would *resurrect* an entry the other phone deleted offline
   (last-write-wins with no conflict signal). `update()` fails on a missing doc, so a stale
   offline edit fails instead of undeleting.
+- **`rescueMedGiven` / `rescueMedDetails` → `medicationGiven` / `medicationDetails`** in the
+  seizure `details` (§3). The sealed `ObservationDetails.Seizure` uses the new names; the
+  backfill renames the legacy keys. One medication concept — no "rescue" vs other category.
+  UI labels drop "rescue" too (`SeizureDetailScreen`, `AddEditSeizureScreen`, the PDF/CSV
+  exporters and their tests).
 - **`summary` is recomputed on every write** (§3).
 - **Keep the read pattern the shipped app uses:** fetch the collection with a single
   `orderBy('occurredAt', descending: true)` and filter by `type` / pet / logger client-side.

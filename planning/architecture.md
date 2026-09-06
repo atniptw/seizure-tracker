@@ -96,8 +96,9 @@ households/{householdId}/observations/{observationId}
   # attachment: {...} | null                  # post-v1 — see §8
   details: { ...type-specific fields... }
     # seizure: durationSeconds, seizureType, symptoms[], preSeizureSigns, possibleTriggers,
-    #   recoveryMinutes, recoveryNotes, rescueMedGiven, rescueMedDetails, notes
-    #   (no recoveryTime / recoveryBehavior — those were phantom; migration.md §3)
+    #   recoveryMinutes, recoveryNotes, medicationGiven, medicationDetails, notes
+    #   (no recoveryTime / recoveryBehavior — those were phantom; migration.md §3.
+    #    medicationGiven/Details renamed from rescueMed* — one medication concept)
     # note: description, notes
 
 codeIndex/{code}

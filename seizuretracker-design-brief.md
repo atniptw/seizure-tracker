@@ -50,8 +50,8 @@ entries unless they're an admin. Where it materially changes the layout, mock bo
 
 The app shipped as a single-purpose seizure tracker: one dog, one household, a detailed
 form for exactly one kind of event. That's still the core and the best-built part of the
-app — the seizure form captures duration, type, symptoms, triggers, recovery, and rescue
-meds in real detail, and it needs to stay fast to fill out, because it's often being
+app — the seizure form captures duration, type, symptoms, triggers, recovery, and any
+meds given in real detail, and it needs to stay fast to fill out, because it's often being
 filled out under stress right after something scary happened.
 
 The expansion is to turn it into a general pet health diary: a place to jot down anything
@@ -84,7 +84,7 @@ is the central design problem for this revamp.
 
 ### 5. Log an entry
 - Pick entry type *(all new)*: **seizure logging stays one tap away, never buried behind the type picker** (top priority — this is a hard requirement, not a nice-to-have), choose Seizure or Other/health note, pick which pet (defaults to last-viewed)
-- Capture a seizure: date/time, duration, seizure type, symptoms, pre-seizure signs, triggers, recovery time/behavior, rescue meds given, notes — all existing today. New: one-tap timer during an active seizure, voice dictation. *(Photo/video attachment: backlogged — post-v1.)*
+- Capture a seizure: date/time, duration, seizure type, symptoms, pre-seizure signs, triggers, recovery time/behavior, any meds given, notes — all existing today. New: one-tap timer during an active seizure, voice dictation. *(Photo/video attachment: backlogged — post-v1.)*
 - Capture a health note (Other) *(all new, kept deliberately simple)*: what's going on (free text), when it started, notes. *Open question — not yet designed: which structured fields (severity, category, vitals) are worth adding later vs. just noise; don't over-build this before that research happens. Photo attachment is backlogged — post-v1.*
 - Save & confirm: save (existing), quick-log widget/lock screen (new). *(Notify household on save: backlogged — post-v1.)*
 

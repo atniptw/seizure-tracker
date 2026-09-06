@@ -1,9 +1,9 @@
 # Seizure Tracker
 
 A small Android app for logging a household's pets' health events — seizures in detail (what
-happened, how long it lasted, recovery time, rescue meds given), plus lightweight health
+happened, how long it lasted, recovery time, any medication given), plus lightweight health
 notes for anything else worth telling the vet — and sharing a clean PDF/CSV report. It also
-keeps each pet's profile, maintenance medications, and a shared vet directory. Multiple
+keeps each pet's profile, medications, and a shared vet directory. Multiple
 people (you, a partner, a petsitter) can log from their own phones; everything syncs through
 a free Firebase backend and also works offline (entries sync once you're back online).
 
@@ -75,14 +75,14 @@ send it to them directly to sideload.
 ## What it does
 
 - **Log a seizure**: date/time, duration, seizure type, a symptom checklist, signs before
-  onset, possible triggers, recovery time and notes, whether a rescue medication was given
+  onset, possible triggers, recovery time and notes, whether a medication was given
   (and details), free-text notes, and who logged it.
 - **Log a health note**: a lightweight entry for anything else worth telling the vet — free
   text, when it started, and notes.
 - **History**: every past entry, most recent first, tap through to view or edit.
 - **Pet profiles**: one per pet (name, species, breed, weight, birth date) with that pet's
-  list of maintenance medications (name/dose/frequency) — kept separate from the "rescue med
-  given during a seizure" field on each entry.
+  list of medications (name/dose/frequency). Whether a medication was given during a seizure
+  is recorded on that entry, not here.
 - **Vets**: one shared vet directory per household, with each vet linked to specific pets and
   a role label (general / emergency / neuro / other).
 - **Export for vet**: pick which pet, a date range (last 30 / 90 days, all time, or a custom
