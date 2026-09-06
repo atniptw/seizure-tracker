@@ -102,9 +102,10 @@ households/{householdId}/observations/{observationId}
     # note: description, notes
 
 codeIndex/{code}
-  householdId, householdName                   # id + display name only (security-privacy.md §8 item 8)
+  householdId                                   # id only — join preview deferred, so no
+                                                #   householdName in the index yet (security-privacy.md §8 item 8)
   # top-level, not under households/ — a joiner resolves a code to a household id before
-  #   they're a member and can read the household doc. No pet names, no vet info, no health data.
+  #   they're a member and can read the household doc. No name, no pet/vet/health data.
 ```
 
 **Single polymorphic `observations` collection, envelope + details:** every logged thing — a seizure, a general note, and whatever gets added later (medication given, vet visit, weight check) — is something a household member observed and recorded about the pet. Rather than force each into its own collection, they all live in `observations`, discriminated by `type`. At this data volume there's no reason to give seizures special-case treatment; a single unified per-pet timeline is also simpler to query and export (§7) — and to notify on, if notifications are ever built (§5) — than merging multiple collections would be. `seizure` and `note` are the first two `type`s; more get added as new observation types come up, without restructuring anything.

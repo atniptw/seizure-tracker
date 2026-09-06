@@ -17,7 +17,8 @@ today, **(new)** = idea for the revamp, not yet built.
 >   returns later with its account-linking safety net), pet photo / any attachment, dose
 >   reminders, "log a dose given" + med-adherence status, notifications, quick-log
 >   home/lock-screen widget, "email directly to a vet", frequency-trend chart, combined
->   all-pets view, history filters, compare-to-similar, join-code rotation, QR-code join. The
+>   all-pets view, history filters, compare-to-similar, join-code rotation, QR-code join,
+>   join preview ("you're about to join *X*" — so `codeIndex` gets no household name yet). The
 >   next release is shipped-app parity (minus anonymous sign-in) + admin/member roles + the
 >   join-code relocation + an export log.
 > - What **is** genuinely new and in scope: the admin/member **read-only screen variants**
@@ -72,7 +73,7 @@ is the central design problem for this revamp.
 ### 1. Get set up
 - Sign in: Google (existing). *Continue-without-an-account (existing), Apple sign-in (new), biometric re-auth (new) are all not in the next release — see the scope note.*
 - Create a household: enter pet + your name (existing), create (existing), add a pet photo (new), pick species — dog/cat/other (new); creator becomes the first admin. *Can be done without an account, but inviting anyone later triggers a required "add Google/Apple" prompt (new — `security-privacy.md` §3.2)*
-- Join a household: enter 6-char code (existing), enter name & join (existing), scan a QR code (new), preview pet before confirming (new); a joiner lands as a non-admin member unless an admin promotes them
+- Join a household: enter 6-char code (existing), enter name & join (existing); a joiner lands as a non-admin member unless an admin promotes them. *Scan a QR code and preview-before-confirming are both not in the next release — see the scope note.*
 
 ### 2. Manage pets — *admin-only actions; members get a read-only view*
 - Add & switch pets *(all new)*: add a pet with name + species, switch via a pet switcher, set a default pet, archive/remove a pet — *switching pets and setting your own default work for everyone (per-device); adding/archiving is admin-only*

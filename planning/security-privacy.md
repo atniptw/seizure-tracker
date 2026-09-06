@@ -281,15 +281,14 @@ Changes from today:
 - **QR code (new, design brief).** The QR encodes the same code (or a deep link containing
   it). It has exactly the same sensitivity as the code — a screenshot of the QR is a leaked
   code — and no separate security properties.
-- **Preview before confirming (new, design brief).** To show "You're about to join *The
-  Bear & Milo house*" before the joiner commits, the `codeIndex/{code}` doc carries the
-  household's **display name** in addition to the id — nothing else, no pet names, no health
-  data. This is a conscious, minimal relaxation of today's index doc, which holds the
-  household id and nothing else (`firestore.rules`): a household nickname is low-sensitivity,
-  and anyone holding the code was given it on purpose. `architecture.md` §3 documents the
-  id + display-name shape as the target. Pet names are *not* in the index; a fuller preview (pets)
-  only renders after the join write lands, with a "this isn't my household — leave" escape
-  hatch.
+- **Preview before confirming — deferred (`product-spec.md §4.0`).** The next release has no
+  "you're about to join *X*" screen: enter code → join, with a "this isn't my household —
+  leave" escape hatch after the fact. Because of that, `codeIndex/{code}` **keeps its
+  `{ householdId }`-only shape** — the household name is not added to the index yet
+  (`migration.md §4 area 2`). *Design for when the preview is built:* the index doc carries
+  the household's **display name** alongside the id — nothing else, no pet names, no health
+  data; a household nickname is low-sensitivity and anyone holding the code was given it on
+  purpose. A fuller preview (pets) would still only render after the join write lands.
 
 **Joining is instant on a valid code — no admin approval queue.** Knowing the current code
 *is* the authorization. An approval step would add friction to onboarding (the joiner waits;
@@ -540,8 +539,9 @@ Two things this gets right that a naive version doesn't:
    on the household doc by any member.
 8. **`codeIndex/{code}` — shape assertion; rotation + durable-creator are post-v1.** `get`
    stays "any signed-in, by exact id" (required for the join); `list` stays `false`. `create`
-   asserts the shape `{ householdId, householdName }` (§4.2 preview — name only, no pet
-   data). **Post-v1** (with rotation): `create`/`update`/`delete` gated to `isAdmin` of the
+   asserts the shape `{ householdId }` — the join preview is deferred (`product-spec.md §4.0`),
+   so no `householdName` in the index yet; when the preview ships, the assertion widens to
+   `{ householdId, householdName }`. **Post-v1** (with rotation): `create`/`update`/`delete` gated to `isAdmin` of the
    target household — which requires the creator's `members/{uid}` doc to exist *before* the
    `codeIndex` write, so household creation must either reorder its writes or stop minting the
    code (`migration.md §4 area 2`). The non-anonymous-creator assertion is also post-v1 (it

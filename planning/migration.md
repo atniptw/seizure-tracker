@@ -79,7 +79,7 @@ window ends at the first write from the new build (§4); after that the path is 
 | Membership source of truth | `households/{id}.members: [uid]` array (also the access-check) | **unchanged** — same name, same client writes | The array on the household doc is the documented source of truth for *access*; `members/{uid}` is the source of truth for *metadata + role*. No rename (see §1). |
 | Member metadata | `members/{uid}` — `displayName`, `authMethod`, `joinedAtMillis` | + `role` | `authMethod` rename (`signInMethod`→`authMethod`) already done in code. `lastActiveAt` is **not** added here — it's post-v1 (`security-privacy.md §4.5`), since both members are Google and stranding can't occur. |
 | Join code | `households/{id}.code` field (every member reads it) | `households/{id}/private/config.joinCode` — admin-only read/write | `security-privacy.md §4.2`, §8 item 6. Removed from the household doc at cleanup. |
-| Code index | `codeIndex/{code}` = `{ householdId }` | `codeIndex/{code}` = `{ householdId, householdName }` | `security-privacy.md §8` item 8. Adds the join-preview name, nothing else. |
+| Code index | `codeIndex/{code}` = `{ householdId }` | unchanged — `{ householdId }` | `security-privacy.md §8` item 8. The join preview (which would add `householdName`) is deferred — `product-spec.md §4.0`. |
 | Medications | `Pet.medications: [Medication]` embedded array; discontinue = delete | `pets/{petId}/medications/{medId}` subcollection + `active`, `startDate`, `endDate` | `architecture.md §3`. Backfill lifts the array into docs. `startDate` backfills to **`null`** (the legacy data has no real start date — inferring one from the pet doc's creation date would fabricate clinical history). |
 | Attachments | dormant `photoUri: String` on `HealthNote` and `Pet` (never displayed, now removed from code) | nothing — attachments are post-v1 (`architecture.md §8`) | Backfill drops any legacy `photoUri` value. The `attachment` envelope field is added when attachments are actually built. |
 | Export log | none | `households/{id}/exportLog/{id}` — admin-create, member-read | `architecture.md §7`. New, empty collection; no backfill. |
@@ -235,15 +235,17 @@ plain `.data.role` **denies hard** on a member doc that has no `role` field, whi
 normal steady state for any future joiner.
 
 **2. Join-code relocation.** Backfill: write `households/{id}/private/config` with
-`{ joinCode: <current code field> }`; add `householdName` to the existing `codeIndex/{code}`
-doc. Leave `households/{id}.code` in place until §7.
+`{ joinCode: <current code field> }`. Leave `households/{id}.code` in place until §7.
+`codeIndex/{code}` keeps its `{ householdId }` shape — the join preview is deferred
+(`product-spec.md §4.0`), so nothing needs the household name in the index yet.
 
-App: read the code from `private/config` (admin-gated "show join code" UI); the join-preview
-screen reads `householdName` from the index.
+App: read the code from `private/config` (admin-gated "show join code" UI). No join-preview
+screen — enter code → join.
 
 Rules: `private/config` — `allow read, write: if admin`; `codeIndex` `get` stays
-any-signed-in; `codeIndex` create/update/delete gated to an admin of the target household
-plus a shape assertion (`security-privacy.md §8` items 6–8).
+any-signed-in; `codeIndex` `create` asserts the `{ householdId }` shape; `list` stays
+`false`. The admin-of-target-household gate on `codeIndex` create/update/delete is **post-v1**
+(it ships with rotation — see the note below and `security-privacy.md §8` items 6–8).
 
 **Not in this area / not in the window:**
 - **Code rotation is not built here** (see §1). It's new feature work, not a relocation, and

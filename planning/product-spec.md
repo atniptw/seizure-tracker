@@ -86,6 +86,7 @@ built next):
 | Compare an entry to similar past ones | design-brief "new" item |
 | Frequency-trend chart (dashboard and in the PDF), combined all-pets dashboard view | design-brief "new" items; needs a charting package (`flutter-migration.md §4`) |
 | Join-code rotation | `security-privacy.md §4.2` — genuinely new feature work |
+| Join preview ("you're about to join *X*" before confirming); QR-code join | `security-privacy.md §4.2`, design-brief. Preview also means `codeIndex` stays `{ householdId }` only — no household name in it yet (`migration.md §4 area 2`). |
 | Photo/video attachments; household notifications | §5 (backlogged) |
 | Web dashboard | `architecture.md §2/§10` |
 | A written privacy policy, App Check, cloud backup / PITR | `security-privacy.md §10` |
@@ -96,8 +97,12 @@ Items marked *(later)* are in the table above.
 **Get set up**
 - Sign in with Google. *Apple sign-in and "continue without an account" (anonymous) are both
   later (§4.0) — the next release is Google-only.*
-- Create a household (pet name + species + your name), becoming its first admin, or get added
-  to an existing one by an admin.
+- Create a household — your first pet's name + species + your name — becoming its first admin.
+  A pet is required; there's no empty household.
+- Or join an existing household: an admin shares its 6-char code, you enter the code and pick
+  your own display name, and you land as a non-admin member (`security-privacy.md §4.2`).
+  *No "you're about to join X" preview screen in the next release (§4.0); QR-code join is also
+  later.*
 
 **Manage pets** *(editing is admin-only; everyone can view)*
 - Add and switch between multiple pets per household; a pet switcher; a default pet. Deleting
