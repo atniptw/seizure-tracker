@@ -114,7 +114,9 @@ Items marked *(later)* are in the table above.
   add). This replaces the shipped hard-delete, which orphaned a pet's history.
 - Edit a pet's profile: name, species, breed, weight, birth date. *Diagnosis date and photo
   are later (§4.0).*
-- See a pet's linked vets from its profile.
+- See a pet's linked vets from its profile, each with its role label — **including the phone
+  number, for every member**. A non-admin petsitter watching the animal must be able to call
+  the emergency vet without needing an admin; that's the point of the shared directory.
 - Medications: add/edit/remove. No in-app reminders or dose-tracking — a "set an
   alarm" action hands off to the phone's own alarm/reminder app, and marking a dose done stays
   in that same app rather than asking the person to also come log it here.
