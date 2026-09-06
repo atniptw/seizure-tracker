@@ -28,3 +28,8 @@ node_modules/
 firestore-debug.log
 firebase-debug.log
 ui-debug.log
+
+# Claude dev-team — ephemeral merge-gate markers (see planning/claude-dev-team.md).
+# The team journal .claude/team/log/ IS committed; only these two are local state.
+.claude/team/review-verdict.md
+.claude/team/last-green

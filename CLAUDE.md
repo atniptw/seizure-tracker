@@ -167,3 +167,43 @@ the share sheet.
 `app/build.gradle.kts` declares dependency versions directly (no version catalog usage) —
 `gradle/libs.versions.toml` exists but is a leftover from the original project scaffold and is
 largely unused; don't assume it reflects actual dependency versions in use.
+
+## Working as a team (the Claude dev team)
+
+This repo is built by a small simulated team of Claude agents. Full design + rationale:
+`planning/claude-dev-team.md`. The essentials:
+
+**Roles.** The **main thread is the Tech Lead / coordinator** — it picks work, spawns one
+specialist at a time (deliberate model/persona/isolation), relays results between them, runs the
+merge, and updates issues/docs/memory. It does *not* write feature code itself. Specialists
+(`.claude/agents/`): `flutter-dev` (implement), `qa` (tests + bug repro), `reviewer` (pre-merge
+review), `rules-engineer` (owns `firestore.rules` + `firestore-tests/` + `firestore.indexes.json`),
+`migration-lead` (drives `migration.md`, Phase 1 only), `backlog-owner` (curates GitHub Issues).
+Phase 2 adds `platform-parity` and `release-manager`.
+
+**Hub-and-spoke.** Subagents cannot talk to each other. Every handoff is an artifact the Tech
+Lead passes along: the GitHub issue, the worktree (`.claude/worktrees/issue-<n>-<slug>`),
+`.claude/team/review-verdict.md` (reviewer's PASS/CHANGES), `.claude/team/last-green` (qa's
+green-run marker), `.claude/team/log/<date>.md` (auto-appended by a SubagentStop hook,
+committed). Specialists never spawn other specialists — they report findings up.
+
+**Merge gate — enforced by hooks, hard-block.** A `git push` that updates `main` *and* touches
+code paths (`app/`, `lib/`, `test/`, `firestore.rules`, `firestore-tests/`) is refused unless
+**both** `.claude/team/review-verdict.md` says `Status: PASS` *and* `.claude/team/last-green`
+exists, and both are newer than the commit(s) being pushed (`check-review-verdict.sh`,
+`check-green-marker.sh`). Docs/config-only pushes are exempt. Those two files are gitignored and
+human-writable — that's the deliberate override when Tom is the reviewer or ran the tests himself.
+
+**Standard flow.** `/standup` → Tech Lead makes a worktree + brief → (`Plan` if the work is
+unclear) → `flutter-dev` implements → `qa` tests and writes the green marker → `reviewer` reviews
+and writes the verdict → Tech Lead merges to `main` with `Fixes #<n>` (no PRs — see the
+push-to-main memory) → CI → issue auto-closes. Bugs: `qa` writes a failing test first. Rules
+changes: `rules-engineer` implements and self-reviews the rules; the Tech Lead always shows the
+rules diff to Tom before pushing.
+
+**Commands.** `/standup`, `/plan-feature <desc>`, `/review`, `/groom`, `/ship` (Phase 2).
+
+**Backlog.** GitHub Issues (`atniptw/seizure-tracker`). **Issue creation is on hold** at Tom's
+request while he reviews the planning docs — `backlog-owner` proposes lists but does not run
+`gh issue create` until told the hold is lifted. Label/milestone taxonomy is in
+`planning/claude-dev-team.md`.

@@ -16,6 +16,20 @@
             "if": "Bash(git commit*)",
             "timeout": 15,
             "statusMessage": "Scanning staged changes for secrets..."
+          },
+          {
+            "type": "command",
+            "command": ".claude/hooks/check-review-verdict.sh",
+            "if": "Bash(git push*)",
+            "timeout": 15,
+            "statusMessage": "Merge gate: checking the review verdict..."
+          },
+          {
+            "type": "command",
+            "command": ".claude/hooks/check-green-marker.sh",
+            "if": "Bash(git push*)",
+            "timeout": 15,
+            "statusMessage": "Merge gate: checking the green test marker..."
           }
         ]
       }
@@ -49,6 +63,18 @@
             "if": "Bash(gh pr merge*)",
             "timeout": 45,
             "statusMessage": "Checking for a freshly-triggered CI run on main..."
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/subagent-log.sh",
+            "timeout": 15,
+            "statusMessage": "Logging the subagent result to the team log..."
           }
         ]
       }
