@@ -77,8 +77,8 @@ is the central design problem for this revamp.
 
 ### 2. Manage pets — *admin-only actions; members get a read-only view*
 - Add & switch pets *(all new)*: add a pet with name + species, switch via a pet switcher, archive/remove a pet — *switching the active pet is per-device and works for everyone (no separate "default pet" setting); adding/archiving is admin-only*
-- Pet info: edit name/species/breed/weight (existing), add photo (new), birth date & diagnosis date (new), see this pet's linked vets (new) — *editing is admin-only; everyone sees the profile and the linked vets*
-- Medications: add/edit/remove (existing), dose reminders (new), log that a dose was actually given (new) — *the medication list is admin-managed; setting a reminder and logging a dose-given are available to everyone (a dose-given is just an entry)*
+- Pet info: edit name/species/breed/weight/birth date (existing + new fields), see this pet's linked vets incl. phone numbers (new) — *editing is admin-only; everyone sees the profile, the linked vets, and their numbers*. *Diagnosis date and photo are not in the next release — see scope note.*
+- Medications: add / edit / **discontinue** (marks inactive with an end date — not a delete; a true delete only for a mis-added entry) — *admin-managed; the next release shows the active list only*. Dose reminders, dose-given logging, the "set an alarm" OS hand-off, and a past-medications view are all not in the next release — see scope note.
 
 ### 3. Manage vets — *admin-only; members get a read-only view*
 - Manage vet contacts: add a vet contact — clinic/vet/phone/email (existing single-field version today; new model), label the relationship per pet (general care / emergency / neuro / other) (new), link one vet to multiple pets (new), link multiple vets to one pet (new), edit/remove a contact (new), see which pets share a vet (new) — *members see the directory and links but no add/edit/remove controls*

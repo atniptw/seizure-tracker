@@ -236,10 +236,11 @@ Notes on specific rows:
   change wouldn't rewrite history anyway — which removes the main argument against allowing
   the edit. See §10.
 - **Not a household write, so any member can do it for themselves:** the pet switcher (which
-  sets the per-device active pet — there's no separate "default pet"), and setting a
-  medication reminder (which hands off to the phone's alarm app — product-spec §4). These are per-device preferences (the local
+  sets the per-device active pet — there's no separate "default pet"), the accessibility
+  toggles, and the local app-lock setting (§6). These are per-device preferences (the local
   key–value store — `UserPrefs`/DataStore today, `shared_preferences` in Flutter), not shared
-  state, so the admin split doesn't apply.
+  state, so the admin split doesn't apply. *(The "set an alarm" medication hand-off — also not
+  a household write — is deferred, `product-spec.md §4.0`.)*
 - The force-link-before-invite gate (§3.2) is **post-v1** — the next release is Google-only
   (`product-spec.md §4.0`), so there's no anonymous creator to gate.
 

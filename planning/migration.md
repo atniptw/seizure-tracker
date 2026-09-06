@@ -323,6 +323,10 @@ of a delete; current-meds UI filters `active == true`. "Remove pet" sets `archiv
 admin` (its own nested `match`, not covered by the `pets` rule); the pet doc's own
 admin-only write rule already covers the `archived` flip.
 
+`startDate`/`endDate`/`active` are stored and written, but the next release only *shows* the
+active list — no past-medications view and no "set an alarm" hand-off (`product-spec.md §4.0`).
+Both are pure client features for later; nothing here blocks them.
+
 **5. Export log.** No backfill (new empty collection). App: on a successful export, an
 admin's device writes one `{ type, rangeStart, rangeEnd, petIds, createdAt }` doc; export
 becomes admin-gated (`product-spec.md §4`). Rules: `exportLog/{id}` — `create: if admin`,

@@ -53,9 +53,10 @@ non-admin role is for someone who should only ever add entries. Full capability 
 - **Health note** — a deliberately lightweight entry type for anything else worth mentioning to
   the vet: free-text description, when it started, notes. Stays unstructured on purpose (see
   non-goals, §5).
-- **Medication** — belongs to a pet, not an entry: name/dose/frequency/notes. One list per pet,
-  no medication categories. If a medication is given around a seizure, that's noted on the
-  seizure entry itself, not tracked here.
+- **Medication** — belongs to a pet, not an entry: name/dose/frequency/notes, plus an
+  active/discontinued state (with an end date when discontinued — kept, not deleted). One list
+  per pet, no medication categories. If a medication is given around a seizure, that's noted on
+  the seizure entry itself, not tracked here.
 - **Member profile** — display name, sign-in method, and role (admin / non-admin) per
   household member, for showing "logged by X", the member list, and gating who can manage
   the household. The "who logged it" on an entry also decides who may edit or delete it: its
@@ -81,6 +82,7 @@ built next):
 | Apple sign-in | with App Store distribution — `security-privacy.md §3.1` |
 | Anonymous sign-in ("continue without an account") + all account-linking / stranded-identity UX | `security-privacy.md §3.1–3.3, §4.5` — the next release is Google-only; anonymous returns as one unit with its safety net |
 | In-progress seizure timer, voice dictation | design-brief "new" items |
+| Medication "set an alarm" hand-off (OS clock/reminders); past-medications view (discontinued meds are retained, just not shown) | §5; not symmetric across platforms — Android has `ACTION_SET_ALARM`, iOS has no system-alarm API |
 | Pet `diagnosisDate` | `architecture.md §3` |
 | History filters (pet / type / date / logger), month grouping | design-brief "new" items |
 | Compare an entry to similar past ones | design-brief "new" item |
@@ -117,9 +119,11 @@ Items marked *(later)* are in the table above.
 - See a pet's linked vets from its profile, each with its role label — **including the phone
   number, for every member**. A non-admin petsitter watching the animal must be able to call
   the emergency vet without needing an admin; that's the point of the shared directory.
-- Medications: add/edit/remove. No in-app reminders or dose-tracking — a "set an
-  alarm" action hands off to the phone's own alarm/reminder app, and marking a dose done stays
-  in that same app rather than asking the person to also come log it here.
+- Medications: add, edit, and **discontinue** the pet's list (name / dose / frequency /
+  notes). Discontinuing marks the med inactive with an end date — it's kept, not deleted (a
+  vet may ask what the pet was on before); a true delete is only for an entry added by
+  mistake. The next release shows the active list only. No in-app reminders or dose-tracking
+  (§5); the "set an alarm" hand-off and a past-medications view are both *later* (§4.0).
 
 **Manage vets** *(admin-only; everyone can view)*
 - One shared vet directory per household, not one list per pet.
@@ -196,10 +200,12 @@ Items marked *(later)* are in the table above.
   entry the next time they open the app.
 - **No in-app medication reminders or dose-given tracking.** We're not taking on responsibility
   for an alarm firing reliably (background execution, OS battery/notification restrictions,
-  etc.), and marking a dose done belongs in whatever alarm/reminder app the person already used
-  to set the reminder — not a second place to remember to log it. Adherence still gets captured
-  where it actually matters: as a note on the seizure entry itself, if a missed or late dose is
-  relevant to that seizure (see §4).
+  etc.), and marking a dose done belongs in whatever reminder app the person already uses —
+  not a second place to remember to log it. The medication list is reference data. A "set an
+  alarm" hand-off to the phone's clock/reminders app *may* come later (§4.0) but isn't in the
+  next release, and even then it's an OS hand-off, not an in-app reminder. Adherence still gets
+  captured where it actually matters: as a note on the seizure entry itself, if a missed or
+  late dose is relevant to that seizure (see §4).
 - **No vet-facing account, portal, or direct system access, ever.** Sharing is always
   phone-in-hand or an export the owner sends themselves — the app never gives a vet or their
   staff their own login or a direct line into the data. This is a deliberate line, not a
