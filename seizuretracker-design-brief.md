@@ -84,7 +84,7 @@ is the central design problem for this revamp.
 - Manage vet contacts: add a vet contact — clinic/vet/phone/email (existing single-field version today; new model), label the relationship per pet (general care / emergency / neuro / other) (new), link one vet to multiple pets (new), link multiple vets to one pet (new), edit/remove a contact (new), see which pets share a vet (new) — *members see the directory and links but no add/edit/remove controls*
 
 ### 4. Manage household — *admin-only*
-- Household members: view & copy join code — *admins only; a member never sees the code*, see who's in the household (new) — *everyone*, remove a member (new) — *admins remove others; anyone can leave themselves*, rename household/pet after setup (new) — *admins only*
+- Household members: view & copy join code — *admins only; a member never sees the code*, see who's in the household + who's an admin (new) — *everyone*, **promote a member to admin / demote an admin (new) — *admins only; the app blocks removing or demoting the last admin***, remove a member (new) — *admins remove others; anyone can leave themselves*, rename household/pet after setup (new) — *admins only*
 
 ### 5. Log an entry
 - Pick entry type *(all new)*: **seizure logging stays one tap away, never buried behind the type picker** (top priority — this is a hard requirement, not a nice-to-have), choose Seizure or Other/health note, pick which pet (defaults to the active pet)

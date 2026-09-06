@@ -218,12 +218,16 @@ today it writes a whole `MemberProfile` with no merge, so once `role` exists a r
 the Flutter cutover re-join) would overwrite it, and the admin-only `role` rule would then
 reject the write outright, breaking the join flow. Add the admin checks in the
 ViewModels/repositories that gate management actions; non-admin is a state the code must
-handle even though neither current user is in it.
+handle even though neither current user is in it. Add a **promote/demote** action
+(`MemberRepository` writes another member's `role`) and the **client-side last-admin guard**
+(block demote/remove when it would leave zero admins — `security-privacy.md §4.4`).
 
 Rules: `security-privacy.md §8` **items 1, 2, 3, 4** (item 5 is `observations`, area 3; item
 10 is `exportLog`, area 5 — the earlier "1, 2, 4, 5, 10" list here was wrong):
 - item 1 — `members/{uid}` create stays self-only, **but `role` must be absent or `"member"`
-  on create, and immutable on any self-`update`** (see `security-privacy.md §8`).
+  on create, and immutable on any self-`update`**; another member's `role` is writable **only
+  by an admin** — that's the promote/demote path (`product-spec.md §4`, `security-privacy.md
+  §8` item 1). The last-admin invariant is client-only (§4.4).
 - item 2 — `members/{uid}` delete becomes admin-only, plus a self-leave carve-out.
 - **item 3 — household-doc writes become admin-only**, with two diff-constrained carve-outs
   (join: `affectedKeys` is exactly `["members"]`, array grows by one, the element is

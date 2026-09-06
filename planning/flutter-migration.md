@@ -219,8 +219,8 @@ with pickers/derived state, **L** = significant logic.
 | Vets | `VetsDirectoryScreen` | `/vets` | Shared directory; client-side "which pets" filter. | S |
 | Vets | `VetDetailScreen` | `/vets/new`, `/vets/:id/edit`, `/vets/new?linkPet=:petId` | Add/edit vet; the `linkToPetId` one-flow variant as a query param, not a separate route. Admin-gated. | M |
 | Vets | `LinkVetSheet` | bottom sheet | Link existing vet to a pet with a role. Multiple links per pet–vet pair are allowed (e.g. General + Emergency) — don't enforce uniqueness. | S |
-| Household | `HouseholdScreen` | `/household` | Member list (everyone); show/share join code + remove-member (admin only). **No rotate** (*later*, §1). | M |
-| Household | `RemoveMemberDialog` | dialog | Confirm. (Rotation prompt is *later*.) | S |
+| Household | `HouseholdScreen` | `/household` | Member list + who's an admin (everyone); leave-household (everyone); show/share join code, rename, remove-member, **promote/demote admin** (admin only). Client blocks removing/demoting the last admin (`security-privacy.md §4.4`). **No rotate** (*later*, §1). | M |
+| Household | `RemoveMemberDialog` | dialog | Confirm remove / leave / promote / demote. (Rotation prompt is *later*.) | S |
 | Settings | `SettingsHubScreen` | `/settings` | Hub: display name, active pet, links out. | S |
 | Settings | `AccessibilityScreen` | `/settings/accessibility` | High-contrast / larger-text / reduce-motion → `a11yProvider`. | S |
 | Export | `ExportScreen` | `/export` | Pet, date range, include-types, format. Admin-gated. Writes an `exportLog` doc on success. PDF rendering is split into Phase 6 — that's why this is M not L. | M |
@@ -266,8 +266,8 @@ Each phase is a mergeable chunk. The Kotlin app keeps running throughout (§2).
 - **Phase 4 — pets & vets.** Manage pets, add/edit pet + the medications-subcollection CRUD,
   pet switcher, vet directory, vet detail (+ batch delete-with-links), link-vet sheet. Admin
   gating throughout.
-- **Phase 5 — household & settings.** Household screen (member list, show/share code, remove),
-  settings hub, accessibility screen.
+- **Phase 5 — household & settings.** Household screen (member list, show/share code, rename,
+  remove, promote/demote admin, leave), settings hub, accessibility screen.
 - **Phase 6 — export.** `pdf`/`printing` report, CSV, share/save, `exportLog` write + the
   past-exports list. Expect the PDF to look different — verify on-device and **budget a design
   pass on the report layout** (the shipped hand-rolled one has no unit test either).

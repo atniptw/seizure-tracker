@@ -130,14 +130,21 @@ Items marked *(later)* are in the table above.
 **Manage vets** *(admin-only; everyone can view)*
 - One shared vet directory per household, not one list per pet.
 - Link a vet to a pet with a role label; a pet can have several vets, a vet can serve several
-  pets; edit/remove links.
+  pets, and one vet can hold more than one role for the same pet (General + Emergency);
+  edit/remove links.
 
-**Manage household** *(admin-only)*
-- Admins: add a new member (mechanism in `security-privacy.md`), view the member list, remove
-  a member, rename the household, view/share the join code. *Rotating the code is later
-  (§4.0).*
-- Non-admin members: view the member list only. They cannot add or remove anyone, rename
-  anything, or see the join code.
+**Manage household**
+- Admins: view the roster; **promote a member to admin, or demote an admin** (a household can
+  have several admins — this is how a co-managing partner gets full access, per §2); remove
+  another member; leave the household themselves; rename the household; view and share the join
+  code. You can't remove or demote the **last** admin — the app blocks it ("make someone else
+  an admin first"). Admin status is granted by an existing admin; there's no separate "transfer
+  ownership" step, and no single owner — just the admin set (`security-privacy.md §4.4`).
+  *Rotating the code is later (§4.0).*
+- Non-admin members: view the roster (names + who's an admin) and leave the household. They
+  cannot promote/demote anyone, remove another member, rename anything, or see the join code.
+- Joining is joiner-initiated (an admin shares the code — see "Get set up"); an admin doesn't
+  "add" a member, and there's no approval queue. A join is visible in the roster to everyone.
 
 **Log an entry** — the core loop, and the one place speed matters most
 - Pick entry type (Seizure / Health note), then which pet (defaults to the active pet). This picker
