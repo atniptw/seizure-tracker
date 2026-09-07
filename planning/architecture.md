@@ -26,10 +26,10 @@ client re-platform). What's **not yet built**:
   and backlogged. §8's local-only conclusion stands as the approach for when attachments are
   built; the shipped app's half-built `photoUri` capture was removed.
 - **`diagnosisDate` pet field, history filters, the frequency-trend chart, the combined
-  all-pets dashboard view, the in-progress seizure timer, voice dictation,
-  compare-to-similar-entries** — named in `product-spec.md §4` but **not in the next release**
-  (see `product-spec.md`, "What the next release contains"). *(The `archived` pet field —
-  and archive-instead-of-hard-delete — **is** in the next release, `product-spec.md §4`.)*
+  all-pets dashboard view, compare-to-similar-entries** — named in `product-spec.md §4` but
+  **not in the next release** (see `product-spec.md`, "What the next release contains").
+  *(The `archived` pet field — and archive-instead-of-hard-delete — **is** in the next
+  release, `product-spec.md §4`.)*
 
 ## 1. Goals that shape every decision here
 
@@ -136,7 +136,6 @@ This is the architecture's central requirement, so it's worth being explicit abo
 - The seizure form writes directly to the local cache and returns immediately — the save button doesn't wait on a network round trip. The SDK flushes queued writes to Firestore itself once connectivity returns; there's no custom retry/queue logic to write or maintain.
 - The one thing this pattern doesn't give for free: conflict handling if two people edit the *same* observation offline at the same time. The access split (`security-privacy.md` §4.1) narrows the editors to its logger plus admins, so a genuine concurrent edit is rare; last-write-wins (Firestore's default) is an acceptable trade-off rather than something to engineer around. **But** the likelier offline conflict is delete-vs-edit — one device deletes an entry, the other edits it offline, and a `set()` would *resurrect* the deleted doc silently. So observation edits use `update()` (which fails on a missing doc), not `set()` — `migration.md §4 area 3`.
 - **Security Rules are not evaluated on the local cache.** A write a non-admin (or a since-demoted admin) queues offline is applied optimistically to the UI, then rejected on flush — the SDK drops it and the cache reverts with no error surfacing on the screen that made it. Once the role split lands, every management action has this path. Mitigation is client-side: never let a non-admin *initiate* a gated write. `flutter-migration.md §11` verifies the rejected-write behavior on a real device in Phase 3.
-- The in-progress seizure timer (a post-v1 feature) would live in local app state (Riverpod), not Firestore — no reason to round-trip a running timer through the network layer.
 
 ## 5. Household notifications
 

@@ -172,7 +172,7 @@ Phase 1: `firestore.indexes.json` + `observations.details` exemption · `seizure
 offline rejected-write verification. Phase 2 epics: Flutter scaffold + dart-define flavors + CI ·
 Riverpod layer · auth port · screen ports (sub-issues) · Dart PDF/CSV export · iOS signing +
 TestFlight pipeline · in-app account/data deletion (deferred to first external build). Backlog:
-notifications · photo/video attachments · in-progress seizure timer.
+notifications · photo/video attachments.
 
 ---
 

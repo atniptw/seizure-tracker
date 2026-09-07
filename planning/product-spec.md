@@ -83,7 +83,6 @@ built next):
 |---|---|
 | Apple sign-in | with App Store distribution — `security-privacy.md §3.1` |
 | Anonymous sign-in ("continue without an account") + all account-linking / stranded-identity UX | `security-privacy.md §3.1–3.3, §4.5` — the next release is Google-only; anonymous returns as one unit with its safety net |
-| In-progress seizure timer, voice dictation | design-brief "new" items |
 | Medication "set an alarm" hand-off (OS clock/reminders); past-medications view (discontinued meds are retained, just not shown) | §5; not symmetric across platforms — Android has `ACTION_SET_ALARM`, iOS has no system-alarm API |
 | Pet `diagnosisDate` | `architecture.md §3` |
 | History: month grouping, filters (type / date / logger), and a multi-pet view (next release is active-pet-only, flat, newest-first) | design-brief "new" items |
@@ -157,8 +156,7 @@ Items marked *(later)* are in the table above.
 - Seizure form: date/time (defaults to now), duration, seizure type, a symptom checklist,
   pre-seizure signs, possible triggers, recovery time, recovery notes, any medication given
   around the seizure (with details), and free notes. "Who logged it" is filled automatically
-  from the signed-in member — not a field. *A one-tap in-progress timer and voice dictation
-  are later (§4.0).* The triggers/notes fields are where a missed or late dose gets captured
+  from the signed-in member — not a field. The triggers/notes fields are where a missed or late dose gets captured
   if it's relevant to this seizure — there's no separate dose-tracking feature (see §5).
 - Health note form: one free-text description and a start time — nothing else. Stays minimal —
   see §5.
@@ -198,6 +196,10 @@ Items marked *(later)* are in the table above.
 - **The health note stays unstructured.** No severity scale, category picker, or vitals fields
   until there's real usage data on what people actually want to record there — it ships as free
   text, and only that.
+- **No in-progress seizure timer, no voice dictation.** Both were floated as "new" items in
+  the design brief; neither is being built, now or later. The seizure form takes a duration
+  the owner enters (or estimates afterward) and typed text — a live stopwatch and speech-to-text
+  are explicitly out of the product, not deferred.
 - **Nothing about multi-pet support may slow down logging a seizure.** Logging is scoped to
   the active pet with no in-flow pet picker (§4); if any design decision in onboarding, the
   pet switcher, or navigation adds friction to the one-tap seizure path, the decision is

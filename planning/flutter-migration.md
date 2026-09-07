@@ -22,7 +22,6 @@ describes as part of the target product but that don't ship next):
 
 - **Apple sign-in** — with App Store distribution (`security-privacy.md §3.1`). TestFlight
   internal testing doesn't require it.
-- In-progress seizure timer, voice dictation.
 - Pet `diagnosisDate`; history filters; compare-to-similar; the frequency-trend
   chart (dashboard + PDF) and the combined all-pets dashboard view.
   (Pet `archived` / archive-instead-of-delete **is** in scope — `product-spec.md §4`.)

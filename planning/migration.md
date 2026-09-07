@@ -87,8 +87,7 @@ window ends at the first write from the new build (§4); after that the path is 
 **Not changed by this migration** (kept at parity with the shipped app; several appear as
 "v1" in `product-spec.md §4` but move to a later release — see `product-spec.md` "What the
 next release contains"): pet `diagnosisDate` field, history filters, the frequency-trend
-chart, the combined all-pets dashboard view, the in-progress seizure timer, voice dictation,
-compare-to-similar-entries, Apple sign-in.
+chart, the combined all-pets dashboard view, compare-to-similar-entries, Apple sign-in.
 
 **Pet `archived` (new — in the next release).** Add `archived: bool` to every pet doc,
 backfilled to `false` (area 4). The client switches "remove pet" from a hard-delete to
