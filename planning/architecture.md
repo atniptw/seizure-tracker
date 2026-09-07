@@ -102,7 +102,7 @@ households/{householdId}/observations/{observationId}
     #   recoveryMinutes, recoveryNotes, medicationGiven, medicationDetails, notes
     #   (no recoveryTime / recoveryBehavior — those were phantom; migration.md §3.
     #    medicationGiven/Details renamed from rescueMed* — one medication concept)
-    # note: description, notes
+    # note: description        (single free-text field — legacy `notes` merged in at backfill, migration.md §3)
 
 codeIndex/{code}
   householdId                                   # id only — join preview deferred, so no

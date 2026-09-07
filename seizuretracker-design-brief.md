@@ -18,7 +18,7 @@ today, **(new)** = idea for the revamp, not yet built.
 >   returns later with its account-linking safety net), pet photo / any attachment, dose
 >   reminders, "log a dose given" + med-adherence status, notifications, quick-log
 >   home/lock-screen widget, "email directly to a vet", frequency-trend chart, combined
->   all-pets view, history filters, compare-to-similar, join-code rotation, QR-code join,
+>   all-pets view, history filters + month grouping, compare-to-similar, join-code rotation, QR-code join,
 >   join preview ("you're about to join *X*" — so `codeIndex` gets no household name yet). The
 >   next release is shipped-app parity (minus anonymous sign-in) + admin/member roles + the
 >   join-code relocation + an export log.
@@ -90,12 +90,12 @@ is the central design problem for this revamp.
 ### 5. Log an entry
 - Two persistent floating buttons at the bottom — **Seizure** and **Health note** — each opens its form immediately for the **active pet**. No entry-type menu, no in-flow pet picker: **logging a seizure is one tap** (top priority — a hard requirement). To log for a different pet, switch the active pet first. *This replaces the shipped single-"+"→`QuickAddSheet` flow (which cost an extra tap on seizures — the sheet's code comment warns against re-splitting without re-validating; the product owner has now made that call).*
 - Capture a seizure: date/time, duration, seizure type, symptoms, pre-seizure signs, triggers, recovery time/behavior, any meds given, notes — all existing today. New: one-tap timer during an active seizure, voice dictation. *(Photo/video attachment: backlogged — post-v1.)*
-- Capture a health note (Other) *(all new, kept deliberately simple)*: what's going on (free text), when it started, notes. *Open question — not yet designed: which structured fields (severity, category, vitals) are worth adding later vs. just noise; don't over-build this before that research happens. Photo attachment is backlogged — post-v1.*
+- Capture a health note (Other) *(all new, kept deliberately simple)*: **one description field + when it started, and nothing else** (the separate "notes" field is being dropped — one text box). *Open question — not yet designed: which structured fields (severity, category, vitals) are worth adding later vs. just noise; don't over-build this before that research happens. Photo attachment is backlogged — post-v1.*
 - Save & confirm: save (existing), quick-log widget/lock screen (new). *(Notify household on save: backlogged — post-v1.)*
 
 ### 6. Review history
 - See it at a glance: days since last seizure, total count, recent entries (existing); switch pet, frequency trend chart, med-adherence status, combined all-pets view (new)
-- Browse full history: full list (existing); filter by pet/type/date/logger, group by month (new)
+- Browse full history: flat list of the active pet's entries, most recent first (existing). *Month grouping and filters (type/date/logger) are not in the next release — see scope note.*
 - View & edit an entry: view detail, edit, delete with confirm (existing) — *a member sees edit/delete only on entries they logged; an admin, on any entry*; compare to similar past entries (new)
 
 ### 7. Share with the vet — *exporting is admin-only; handing the vet the phone is for anyone*

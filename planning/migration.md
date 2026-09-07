@@ -124,8 +124,12 @@ backfill writes.
   other category. There is **no** `recoveryBehavior` / `recoveryTime` field — those names in
   `architecture.md §3` and `product-spec.md §3` are phantom; no such data exists. `summary` = e.g.
   `"4 min · Generalized (grand mal)"` from duration + type, `"seizure"` if both empty.
-- **`healthNotes/{id}` → `type: "note"`.** `details` gets `description`, `notes`.
-  `summary` = first ~60 chars of `description`. Any legacy `photoUri` value is dropped.
+- **`healthNotes/{id}` → `type: "note"`.** `details` gets a single `description` field. The
+  health note form is now one text field (`product-spec.md §3/§4`), so any non-empty legacy
+  `notes` is **merged into `description`** at backfill — `description + "\n\n" + notes` when
+  both are set, `notes` alone if `description` is empty, `description` alone otherwise. No
+  standalone `notes` key on `note` observations. `summary` = first ~60 chars of the merged
+  `description`. Any legacy `photoUri` value is dropped.
 - Legacy `id` is **preserved** as the new doc id (`observations/{sameId}`), so a backfill
   re-run is idempotent and any local reference survives.
 - **`summary` is recomputed and rewritten on every observation write by the app** — it's a
@@ -486,6 +490,9 @@ Settled for a two-person closed-track deployment:
   the window and again before the §7 cleanup delete.
 - **`flagForVet` / "mention at next vet visit"** — dropped from the product entirely. No
   field on the envelope, no backfill.
+- **Health note `notes`** — dropped as a standalone field; the form is now one text box
+  (`product-spec.md §3/§4`). Backfill merges any non-empty legacy `notes` into `description`
+  (§3). No data lost.
 - **`summary` for backfilled seizures** — `"<duration> · <type>"` (e.g. `"4 min ·
   Generalized (grand mal)"`), `"seizure"` when both are empty. Recomputed on every write
   (§3); the Flutter client may drop the field and format at render time instead.

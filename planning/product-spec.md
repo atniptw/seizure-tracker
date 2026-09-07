@@ -53,8 +53,8 @@ non-admin role is for someone who should only ever add entries. Full capability 
   any medication given around the seizure + details, free notes, who logged it. (No separate
   "recovery behavior" field — it's folded into recovery notes.)
 - **Health note** — a deliberately lightweight entry type for anything else worth mentioning to
-  the vet: free-text description, when it started, notes. Stays unstructured on purpose (see
-  non-goals, §5).
+  the vet: one free-text description and when it started. That's it — no separate "notes"
+  field. Stays unstructured on purpose (see non-goals, §5).
 - **Medication** — belongs to a pet, not an entry: name/dose/frequency/notes, plus an
   active/discontinued state (with an end date when discontinued — kept, not deleted). One list
   per pet, no medication categories. If a medication is given around a seizure, that's noted on
@@ -86,7 +86,7 @@ built next):
 | In-progress seizure timer, voice dictation | design-brief "new" items |
 | Medication "set an alarm" hand-off (OS clock/reminders); past-medications view (discontinued meds are retained, just not shown) | §5; not symmetric across platforms — Android has `ACTION_SET_ALARM`, iOS has no system-alarm API |
 | Pet `diagnosisDate` | `architecture.md §3` |
-| History filters (pet / type / date / logger), month grouping | design-brief "new" items |
+| History: month grouping, filters (type / date / logger), and a multi-pet view (next release is active-pet-only, flat, newest-first) | design-brief "new" items |
 | Compare an entry to similar past ones | design-brief "new" item |
 | Frequency-trend chart (dashboard and in the PDF), combined all-pets dashboard view | design-brief "new" items; needs a charting package (`flutter-migration.md §4`) |
 | Join-code rotation | `security-privacy.md §4.2` — genuinely new feature work |
@@ -160,19 +160,21 @@ Items marked *(later)* are in the table above.
   from the signed-in member — not a field. *A one-tap in-progress timer and voice dictation
   are later (§4.0).* The triggers/notes fields are where a missed or late dose gets captured
   if it's relevant to this seizure — there's no separate dose-tracking feature (see §5).
-- Health note form: free-text description, start time, notes. Stays minimal — see §5.
+- Health note form: one free-text description and a start time — nothing else. Stays minimal —
+  see §5.
 - Logging works fully offline; entries sync automatically once the device is back online.
   **This is a hard requirement** — a rules-rejected or biometric-failed save must never block
   the logging path (`architecture.md §4`, `security-privacy.md §6`).
 
-**Review history**
-- Dashboard: days since last seizure, total count, recent entries. *A frequency-trend chart
-  and a combined all-pets view are later (§4.0).*
-- Full history: every entry, most recent first, grouped by month. *Filters (pet / type / date
-  / logger) are later (§4.0).*
-- View, edit, or delete an entry with confirmation (a non-admin can edit/delete only entries
-  they logged themselves; an admin, any entry). *"Compare to similar past entries" is later
-  (§4.0).*
+**Review history** *(scoped to the active pet — the switcher changes which pet you're looking at)*
+- Dashboard: days since the active pet's last seizure, its total seizure count, and its recent
+  entries. *A frequency-trend chart and a combined all-pets view are later (§4.0).*
+- Full history: a flat list of the active pet's entries, most recent first. *Month grouping and
+  filters (type / date / logger) are later (§4.0).*
+- View, edit, or delete an entry with confirmation. **Delete is a real delete** — recoverable
+  only from a prior export (entries aren't archived the way pets and medications are; you
+  delete an entry because it was a mistake). A non-admin can edit or delete only entries they
+  logged themselves; an admin, any entry. *"Compare to similar past entries" is later (§4.0).*
 
 **Share with the vet** *(exporting is admin-only; anyone can hand the vet the phone)*
 - Two ways to share, both initiated entirely from your own phone, neither requiring the vet to

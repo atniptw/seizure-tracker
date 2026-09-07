@@ -135,7 +135,8 @@ field names and types** — where it and `architecture.md §3` disagree, `migrat
   `occurredAt`, `createdAt`, `updatedAt`, `summary`, `details`.
 - **`ObservationDetails`** — `freezed` union: `.seizure(durationSeconds, seizureType,
   symptoms, preSeizureSigns, possibleTriggers, recoveryMinutes, recoveryNotes, medicationGiven,
-  medicationDetails, notes)` and `.note(description, notes)`. Field names per `migration.md §3`
+  medicationDetails, notes)` and `.note(description)` (single field — legacy `notes` merged in
+  at backfill, `migration.md §3`). Field names per `migration.md §3`
   — there is no `recoveryTime` / `recoveryBehavior` / `triggers` / `duration` / `type`, and no
   `rescueMed*` (one medication concept — `migration.md §3` renames it at backfill).
 - **`summary`** — the client may drop this field and format the feed line at render time from
@@ -212,7 +213,7 @@ with pickers/derived state, **L** = significant logic.
 | Quick add | two persistent FABs (Seizure / Health note) | on the main screens | Each opens its form directly for the active pet — **no bottom sheet, no in-flow pet picker; one tap to the seizure form** (`product-spec.md §4`). Deliberately replaces the shipped `QuickAddSheet`; don't reunify without re-validating (that sheet's own code comment). | S |
 | Seizure | `AddEditSeizureScreen` | `/observation/seizure/new`, `/observation/:id/edit` | Biggest form: date/time, duration, type dropdown, symptom chips, recovery, medication-given toggle, notes. Edits `update()` not `set()`. | L |
 | Detail | `SeizureDetailScreen` → **`ObservationDetailScreen`** | `/observation/:id` | Read-only detail, per-type body (there's no note-detail screen today — unify rather than port the asymmetry). Compare-to-similar is *later* (§1). | S |
-| Health note | `AddEditHealthNoteScreen` | `/observation/note/new/:petId`, `/observation/:id/edit` | Deliberately minimal: text, when, notes. | S |
+| Health note | `AddEditHealthNoteScreen` | `/observation/note/new/:petId`, `/observation/:id/edit` | Deliberately minimal: one description field + start time. No separate "notes" field (`product-spec.md §3`). | S |
 | Pets | `ManagePetsScreen` | `/pets` | List (filter `archived == false`) + add + **archive** ("remove" sets `archived: true`; a true delete only for a pet with no observations). Admin-gated. | S |
 | Pets | `AddEditPetScreen` | `/pets/new`, `/pets/:id/edit` | Profile form + **the medications-subcollection CRUD** (add / edit / discontinue via `active`+`endDate` — no shipped equivalent) + linked vets. Admin-gated. | **L** |
 | Pets | `PetSwitcherSheet` | bottom sheet | Set `activePetId`. Not admin-gated (per-device pref). | S |
