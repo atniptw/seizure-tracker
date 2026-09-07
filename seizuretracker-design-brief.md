@@ -99,7 +99,7 @@ is the central design problem for this revamp.
 - View & edit an entry: view detail, edit, delete with confirm (existing) — *a member sees edit/delete only on entries they logged; an admin, on any entry*; compare to similar past entries (new)
 
 ### 7. Share with the vet — *exporting is admin-only; handing the vet the phone is for anyone*
-- Export a report: choose time range, share as PDF, share as CSV (existing); choose whether to include health notes, choose which pet(s), email directly to a chosen vet contact, include trend charts, see past exports (new) — *members can see the past-exports list but have no export button; the "hand the vet your phone and walk the dashboard" path needs no special role*
+- Export a report: choose time range (incl. custom), one pet or all pets, whether to include health notes, PDF or CSV (existing); see past exports (new — a read surface the shipped app lacks). The export pet list includes **archived** pets (tagged) so their history stays reachable. *Members can see the past-exports list but have no export button; the "hand the vet your phone and walk the dashboard" path needs no special role. Emailing directly to a vet contact and embedding trend charts are not in the next release — see scope note.*
 
 ## Priorities called out explicitly by the product owner
 1. Logging a seizure must never get harder or slower because of multi-pet context — one tap from a main screen to the seizure form (two dedicated floating buttons, scoped to the active pet; no entry-type menu, no in-flow pet picker), even one-handed under stress.

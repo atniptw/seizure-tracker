@@ -164,6 +164,7 @@ Security Rules are the entire access-control layer — no server-side authorizat
 Generated **on-device**, not via a Cloud Function, for two reasons: it works offline once the relevant observations are in the local cache, and it avoids paying for (or waiting on) server compute for something Dart can do directly.
 
 - CSV: straightforward serialization of the filtered observation set.
+- **The export pet picker is not filtered by `archived`** (unlike the switcher, `activePetProvider`). It lists every pet — archived ones tagged — and "all pets" includes them, so archiving a pet never makes its history unreachable for a vet report (`product-spec.md §4`).
 - PDF: built with the `pdf` and `printing` Dart packages — a clean report with a header and per-observation sections. (A trend chart is a post-v1 feature — when it lands it's a widget rendered to an image via `RenderRepaintBoundary.toImage` and embedded; `flutter-migration.md §4` names the charting package.)
 - Attachments are post-v1 (§8), so exports are text-only for now. When attachments land: because they're local-only, an export built on one device can only embed the media present on that device, and the exported file should say so ("N attachments not available on this device") rather than read as data loss.
 - Exporting is an **admin-only** action (`security-privacy.md` §4.1) — an export leaves the household as a file. A non-admin who needs the vet report asks an admin, or hands the vet the phone directly (which anyone can do).

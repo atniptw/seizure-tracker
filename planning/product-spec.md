@@ -179,13 +179,19 @@ Items marked *(later)* are in the table above.
 **Share with the vet** *(exporting is admin-only; anyone can hand the vet the phone)*
 - Two ways to share, both initiated entirely from your own phone, neither requiring the vet to
   have an account or any access to the app: hand the vet your phone to walk through the
-  dashboard, charts, or timeline directly, or export a PDF (or CSV) and send it however's
-  convenient — email, print, drop it into a vet's own upload portal — using the phone's normal
-  share sheet. The app never talks to a vet's system directly, and there's no vet-facing account
-  or portal to build or secure.
-- Export by time range (e.g. last 30/90 days, all time); choose whether health notes are
-  included; choose which pet(s); see a log of past exports. *Including a trend chart in the
-  export is later (§4.0).*
+  dashboard or timeline directly, or export a PDF (or CSV) and send it however's convenient —
+  email, print, drop it into a vet's own upload portal — using the phone's normal share sheet.
+  The app never talks to a vet's system directly, and there's no vet-facing account or portal
+  to build or secure.
+- Export options: a time range (last 30 days, last 90 days, all time, or a custom start/end);
+  one pet or all pets; whether health notes are included; PDF or CSV. *Including a trend chart
+  in the export is later (§4.0).*
+- **The export sees archived pets.** Unlike the switcher and the dashboard, the export pet
+  picker lists every pet — archived ones tagged "(archived)" — and "all pets" means literally
+  all of them. Archiving a pet must never make its history unreachable for a vet report; the
+  only way to lose it is deleting individual entries.
+- A log of past exports (`households/{id}/exportLog`): what was exported and when. Any member
+  can see it; only an admin can create one (an export is data leaving the household).
 
 ## 5. Non-goals for v1
 

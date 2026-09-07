@@ -326,8 +326,10 @@ renders null as "start date not recorded"), `endDate: null`.
 App: `Pet` drops the embedded `medications` and gains `archived: bool`; `PetRepository` reads
 the subcollection; "discontinue" a medication becomes `active: false` + `endDate` set instead
 of a delete; current-meds UI filters `active == true`. "Remove pet" sets `archived: true`
-(true delete only for a pet with no observations); pet lists / the switcher filter
-`archived == false`. Rules: `pets/{petId}/medications/{medId}` — `read: if member; write: if
+(true delete only for a pet with no observations); the switcher and the dashboard filter
+`archived == false`, **but the export pet picker does not** — it lists every pet so an
+archived pet's history stays reachable for a vet report (`product-spec.md §4`). Rules:
+`pets/{petId}/medications/{medId}` — `read: if member; write: if
 admin` (its own nested `match`, not covered by the `pets` rule); the pet doc's own
 admin-only write rule already covers the `archived` flip.
 

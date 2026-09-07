@@ -224,7 +224,7 @@ with pickers/derived state, **L** = significant logic.
 | Household | `RemoveMemberDialog` | dialog | Confirm remove / leave / promote / demote. (Rotation prompt is *later*.) | S |
 | Settings | `SettingsHubScreen` | `/settings` | Hub: display name, active pet, links out. | S |
 | Settings | `AccessibilityScreen` | `/settings/accessibility` | High-contrast / larger-text / reduce-motion → `a11yProvider`. | S |
-| Export | `ExportScreen` | `/export` | Pet, date range, include-types, format. Admin-gated. Writes an `exportLog` doc on success. PDF rendering is split into Phase 6 — that's why this is M not L. | M |
+| Export | `ExportScreen` | `/export` | Pet (one or all — **list is *not* `archived`-filtered**, archived pets tagged; `product-spec.md §4`), date range (incl. custom), include-health-notes, format. Admin-gated. Writes an `exportLog` doc on success. PDF rendering is split into Phase 6 — that's why this is M not L. | M |
 | Export | `ExportReadyScreen` | `/export/ready` | Share (`share_plus`) / save-a-copy (`file_selector`). | S |
 | Export | **past-exports list** | `/export/log` (or a section of `/export`) | Read `exportLogProvider`; member-visible, no export button for non-admins (`security-privacy.md §8 item 10`). New surface — the shipped app has no read side. | S |
 | — | `LoadingScreen` | — | `sessionProvider` loading state. | S |
