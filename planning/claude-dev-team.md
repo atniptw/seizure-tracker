@@ -5,8 +5,9 @@ Code agents. This doc is the charter: who the "team" is, how they hand work off,
 machine enforces so the process holds even when an agent cuts a corner.
 
 Status: scaffolded **2026-09-06**. Serving the Phase 1 (Kotlin → target Firestore shape)
-migration first; the Flutter personas switch on at `flutter-migration.md` Phase 0. GitHub issue
-creation is **on hold** until Tom finishes reviewing the planning docs.
+migration first; the Flutter personas switch on at `flutter-migration.md` Phase 0. The GitHub
+issue-creation hold was **lifted 2026-09-07**; labels, milestones and issue templates are live and
+the backlog is seeded (§5).
 
 Related: `architecture.md`, `migration.md`, `flutter-migration.md`, `security-privacy.md`;
 memories `v2-team-shape`, `coordinator-pattern`, `feedback-push-to-main`, `flutter-migration-env`,
@@ -158,21 +159,38 @@ specialist doesn't know the backlog), and scope control.
 **Milestones:** `Phase 1 — Firestore shape + rules migration` · `Phase 2 — Flutter re-platform` ·
 `Backlog / post-v1`.
 
-**Templates** (`.github/ISSUE_TEMPLATE/`, added when the hold lifts): `feature` (problem /
+**Templates** (`.github/ISSUE_TEMPLATE/`, live since **2026-09-07**) — GitHub *issue forms*, so
+the fields the team depends on are required rather than optional prose: `feature` (problem /
 proposal / planning-doc ref / acceptance criteria), `bug` (repro / expected vs actual / platform
-/ build), `spike` (question / why / decision owner / doc ref).
+/ build / data impact), `spike` (question / why now / decision owner / doc ref / time box,
+auto-labelled `needs-decision`).
 
 **Workflow:** branch `issue-<n>-<slug>` → commit to `main` with `Fixes #<n>` (no PRs, per
 `feedback-push-to-main`) → CI → auto-close. `/standup` flags a merged branch that didn't close
 its issue.
 
-**Candidate seed issues** (for the first `/groom` once the hold lifts — not yet created):
-Phase 1: `firestore.indexes.json` + `observations.details` exemption · `seizures`+`healthNotes` →
-`observations` (Kotlin) · admin/member roles + rules + test pairs · pre-cutover data backup ·
-offline rejected-write verification. Phase 2 epics: Flutter scaffold + dart-define flavors + CI ·
-Riverpod layer · auth port · screen ports (sub-issues) · Dart PDF/CSV export · iOS signing +
-TestFlight pipeline · in-app account/data deletion (deferred to first external build). Backlog:
-notifications · photo/video attachments.
+**Seeded 2026-09-07** — 17 issues, drafted by `backlog-owner` into
+`.claude/team/backlog-seed-draft.md` and created from it by `.claude/team/seed/create_issues.rb`
+(parses the draft, preflights every label/milestone, creates, then rewrites the draft-internal
+`#n` cross-references to real issue numbers). Re-run it against an amended draft to reseed.
+
+- **Phase 1 (7)** — the full `migration.md §4` cover, not a subset: backup/restore tooling ·
+  admin/member roles · join-code relocation to `private/config` · `firestore.indexes.json` +
+  `observations.details` exemption · `seizures`+`healthNotes` → `observations` · medications
+  subcollection + pet `archived` · `exportLog` + admin-gated export. Landing order is that
+  order — backup first as the safety prerequisite, the index exemption immediately before the
+  `observations` backfill that needs it.
+- **Phase 2 (8)** — Flutter scaffold + flavors + CI · Riverpod · auth port · screen ports
+  (epic) · Dart PDF/CSV export · iOS signing + TestFlight · in-app account/data deletion ·
+  real-device rejected-write verification (`flutter-migration.md §11`).
+- **Backlog / post-v1 (2)** — notifications · photo/video attachments.
+
+The observations issue is knowingly epic-sized (`migration.md` calls it "the largest app diff");
+split it into sub-issues at pickup rather than handing it to `flutter-dev` whole. Scope the docs
+defer that is deliberately **not** seeded — App Check, code rotation, the CSPRNG swap, cloud
+backup/PITR, anonymous sign-in, the `migration.md §7` post-cutover cleanup — is listed under
+"Gaps I did not file" in the draft so a later `/groom` seeds it deliberately rather than the
+backlog looking finished.
 
 ---
 
