@@ -115,6 +115,39 @@ actually contains are in `planning/product-spec.md §4.0`.*
 - **Household notifications** — no "a new entry was just logged" push. Backlogged; needs a
   Cloud Function, which the backend avoids.
 
+## Deploying Firestore rules and indexes
+
+Step 5 above pastes `firestore.rules` into the console by hand. Once the Firebase CLI is
+installed and authenticated (`npm i -g firebase-tools && firebase login`), the rules **and** the
+index configuration deploy straight from this repo instead:
+
+```bash
+firebase deploy --only firestore         --project <your-project-id>   # rules + indexes
+firebase deploy --only firestore:rules   --project <your-project-id>   # rules only
+firebase deploy --only firestore:indexes --project <your-project-id>   # indexes only
+```
+
+`firestore.indexes.json` declares **no composite indexes** — every query the app makes is a
+single `orderBy` on one field, which Firestore's automatic single-field indexes already serve.
+What it does declare is one single-field index **exemption**: `observations.details` is a
+polymorphic payload map that is read but never queried, and without the exemption Firestore
+indexes every `details.*` subfield (and every element of the `details.symptoms` array) on every
+write, for zero query benefit. See `planning/architecture.md §3`.
+
+Three things to know before running the indexes deploy:
+
+- The Firestore **emulator ignores `firestore.indexes.json` entirely** — it neither enforces
+  composite indexes nor applies exemptions. An emulator run proves the file parses; it cannot
+  prove the exemption is live. Confirm that against the real project, in the console
+  (**Firestore Database → Indexes → Single field → Exemptions**) or with
+  `gcloud firestore indexes fields list --database='(default)' --project=<your-project-id>`.
+- The file is the *complete* intended index configuration for the project. `firebase deploy`
+  offers to delete any composite index or field override that exists in the project but is not
+  in the file — answer **no** unless that is what you meant, and don't add `--force` to an
+  automated deploy of it.
+- Firestore does **not** retroactively remove index entries from documents written before an
+  exemption existed. Deploy the exemption before the first `observations` document is written.
+
 ## Costs
 
 Firebase's free "Spark" tier comfortably covers this use case (a handful of users, a few

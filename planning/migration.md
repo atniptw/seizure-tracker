@@ -298,9 +298,9 @@ every `ui/*` package that touches entries.
   `orderBy('occurredAt', descending: true)` and filter by `type` / pet / logger client-side.
   If `ObservationRepository` instead adds a `where(...)` alongside the `orderBy`, that's a
   composite index — which fails at runtime, during verification. If a server-side filter is
-  wanted, add `firestore.indexes.json` and wire it into `firebase.json` (neither exists
-  today — `firebase deploy --only firestore` currently deploys rules only) *before* the
-  window.
+  wanted, declare the composite index in `firestore.indexes.json` (which now exists and is
+  wired into `firebase.json`, so `firebase deploy --only firestore` covers rules + indexes)
+  and deploy it *before* the window.
 
 Rules: add `observations` — `read: if member`, `create: if member && loggedByUid ==
 auth.uid`, `update/delete: if (admin || author) && request.resource.data.loggedByUid ==
