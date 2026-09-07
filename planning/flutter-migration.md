@@ -209,7 +209,7 @@ with pickers/derived state, **L** = significant logic.
 | Onboarding | `WelcomeScreen` | `/welcome` | Sign-in (**Google only** — no continue-without, §5) → create or join household. `sessionProvider` drives it. | M |
 | Dashboard | `DashboardScreen` | `/` | **Parity = days-since-last-seizure, count, recent entries, single active pet** (that's all the shipped screen does). Frequency-trend chart + combined all-pets view are *later* (§1). | M |
 | History | `EntryHistoryScreen` | `/history` | **Parity = flat list, active pet, most-recent-first.** Month grouping *and* filters (pet/type/date/logger) are *later* (§1). One collection now → the eventual filters are trivial. | S |
-| Quick add | `QuickAddSheet` | bottom sheet | Entry-type picker → seizure or note. **Must not add a tap to seizure logging** (`product-spec.md §4`). | S |
+| Quick add | two persistent FABs (Seizure / Health note) | on the main screens | Each opens its form directly for the active pet — **no bottom sheet, no in-flow pet picker; one tap to the seizure form** (`product-spec.md §4`). Deliberately replaces the shipped `QuickAddSheet`; don't reunify without re-validating (that sheet's own code comment). | S |
 | Seizure | `AddEditSeizureScreen` | `/observation/seizure/new`, `/observation/:id/edit` | Biggest form: date/time, duration, type dropdown, symptom chips, recovery, medication-given toggle, notes. Edits `update()` not `set()`. | L |
 | Detail | `SeizureDetailScreen` → **`ObservationDetailScreen`** | `/observation/:id` | Read-only detail, per-type body (there's no note-detail screen today — unify rather than port the asymmetry). Compare-to-similar is *later* (§1). | S |
 | Health note | `AddEditHealthNoteScreen` | `/observation/note/new/:petId`, `/observation/:id/edit` | Deliberately minimal: text, when, notes. | S |
@@ -259,8 +259,8 @@ Each phase is a mergeable chunk. The Kotlin app keeps running throughout (§2).
 - **Phase 2 — auth + onboarding.** `sessionProvider`, `AuthRepository`, `WelcomeScreen`, the
   `Loading`/`NeedsSetup`/`Ready` gate, **and the go_router `redirect` + `refreshListenable`
   bridge** (§6). Reach a signed-in empty shell on both platforms.
-- **Phase 3 — the logging core.** Dashboard, quick-add, add/edit seizure, add/edit health
-  note, entry history, observation detail. Do it first among features. **Verify on a real
+- **Phase 3 — the logging core.** Dashboard, the two Seizure/Health-note FABs, add/edit
+  seizure, add/edit health note, entry history, observation detail. Do it first among features. **Verify on a real
   airplane-moded device, this phase:** (a) offline logging round-trips; (b) a rules-rejected
   write (a demoted-role edit) surfaces *something*, not a silent revert (`architecture.md §4`).
 - **Phase 4 — pets & vets.** Manage pets, add/edit pet + the medications-subcollection CRUD,

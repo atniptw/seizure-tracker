@@ -147,15 +147,20 @@ Items marked *(later)* are in the table above.
   "add" a member, and there's no approval queue. A join is visible in the roster to everyone.
 
 **Log an entry** — the core loop, and the one place speed matters most
-- Pick entry type (Seizure / Health note), then which pet (defaults to the active pet). This picker
-  must never add a tap or a delay to logging a seizure — that is a hard constraint on every
-  design decision in this flow, not a preference.
-- Seizure form: date/time, duration, seizure type, a symptom checklist, pre-seizure signs,
-  possible triggers, recovery time, recovery notes, any medication given around the seizure
-  (with details), free notes, and who logged it. *A one-tap in-progress timer and voice
-  dictation are later (§4.0).* The triggers/notes fields are where a missed or late dose gets
-  captured if it's relevant to this seizure — there's no separate dose-tracking feature (see §5).
-- Health note form: free text, start time, notes. Stays minimal — see §5.
+- Two persistent floating buttons at the bottom of the main screens — **Seizure** and
+  **Health note** — each opens its form immediately, for the **active pet**. There is no
+  entry-type menu and no pet picker in this flow: logging a seizure is one tap. To log for a
+  different pet you switch the active pet first (the switcher). **One tap to the seizure form
+  is a hard constraint** on every design decision here, not a preference. *(This deliberately
+  replaces the shipped single-"+"→bottom-sheet flow, which cost an extra tap on seizures;
+  don't fold the two buttons back into one sheet without re-validating.)*
+- Seizure form: date/time (defaults to now), duration, seizure type, a symptom checklist,
+  pre-seizure signs, possible triggers, recovery time, recovery notes, any medication given
+  around the seizure (with details), and free notes. "Who logged it" is filled automatically
+  from the signed-in member — not a field. *A one-tap in-progress timer and voice dictation
+  are later (§4.0).* The triggers/notes fields are where a missed or late dose gets captured
+  if it's relevant to this seizure — there's no separate dose-tracking feature (see §5).
+- Health note form: free-text description, start time, notes. Stays minimal — see §5.
 - Logging works fully offline; entries sync automatically once the device is back online.
   **This is a hard requirement** — a rules-rejected or biometric-failed save must never block
   the logging path (`architecture.md §4`, `security-privacy.md §6`).
@@ -185,9 +190,10 @@ Items marked *(later)* are in the table above.
 - **The health note stays unstructured.** No severity scale, category picker, or vitals fields
   until there's real usage data on what people actually want to record there — it ships as free
   text, and only that.
-- **Nothing about multi-pet support or the entry-type picker may slow down logging a seizure.**
-  If any design decision in onboarding, the entry-type picker, or navigation adds friction to
-  that flow, the decision is wrong for v1, full stop.
+- **Nothing about multi-pet support may slow down logging a seizure.** Logging is scoped to
+  the active pet with no in-flow pet picker (§4); if any design decision in onboarding, the
+  pet switcher, or navigation adds friction to the one-tap seizure path, the decision is
+  wrong, full stop.
 - **No clinical claims.** This app records owner-observed events and hands them to a
   professional; it does not diagnose, score severity, or suggest treatment. That framing matters
   both ethically and for how much regulatory weight the app has to carry — keep it in mind when

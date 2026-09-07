@@ -9,8 +9,9 @@ today, **(new)** = idea for the revamp, not yet built.
 > - The multi-pet / shared-vet / health-note redesign this brief was written for **has since
 >   shipped** in the Kotlin app. So several items tagged "(new)" / "(all new)" below are now
 >   *live*: add & switch pets, the pet switcher, the shared many-to-many vet model, the
->   member list + remove-member, the entry-type picker, the health-note form. Read those as
->   "(shipped)".
+>   member list + remove-member, the health-note form. Read those as "(shipped)". **Exception:
+>   the shipped single-"+"→`QuickAddSheet` entry-type picker is being replaced** by two
+>   dedicated floating buttons (Seizure / Health note) — §5 below.
 > - **Not in the next release** (design later, or not at all): Apple sign-in, biometric
 >   re-auth, **"continue without an account" / anonymous sign-in** (a deliberate step *below*
 >   shipped-app parity — the next release is Google-only, `product-spec.md §4.0`; anonymous
@@ -87,7 +88,7 @@ is the central design problem for this revamp.
 - Household members: view & copy join code — *admins only; a member never sees the code*, see who's in the household + who's an admin (new) — *everyone*, **promote a member to admin / demote an admin (new) — *admins only; the app blocks removing or demoting the last admin***, remove a member (new) — *admins remove others; anyone can leave themselves*, rename household/pet after setup (new) — *admins only*
 
 ### 5. Log an entry
-- Pick entry type *(all new)*: **seizure logging stays one tap away, never buried behind the type picker** (top priority — this is a hard requirement, not a nice-to-have), choose Seizure or Other/health note, pick which pet (defaults to the active pet)
+- Two persistent floating buttons at the bottom — **Seizure** and **Health note** — each opens its form immediately for the **active pet**. No entry-type menu, no in-flow pet picker: **logging a seizure is one tap** (top priority — a hard requirement). To log for a different pet, switch the active pet first. *This replaces the shipped single-"+"→`QuickAddSheet` flow (which cost an extra tap on seizures — the sheet's code comment warns against re-splitting without re-validating; the product owner has now made that call).*
 - Capture a seizure: date/time, duration, seizure type, symptoms, pre-seizure signs, triggers, recovery time/behavior, any meds given, notes — all existing today. New: one-tap timer during an active seizure, voice dictation. *(Photo/video attachment: backlogged — post-v1.)*
 - Capture a health note (Other) *(all new, kept deliberately simple)*: what's going on (free text), when it started, notes. *Open question — not yet designed: which structured fields (severity, category, vitals) are worth adding later vs. just noise; don't over-build this before that research happens. Photo attachment is backlogged — post-v1.*
 - Save & confirm: save (existing), quick-log widget/lock screen (new). *(Notify household on save: backlogged — post-v1.)*
@@ -101,7 +102,7 @@ is the central design problem for this revamp.
 - Export a report: choose time range, share as PDF, share as CSV (existing); choose whether to include health notes, choose which pet(s), email directly to a chosen vet contact, include trend charts, see past exports (new) — *members can see the past-exports list but have no export button; the "hand the vet your phone and walk the dashboard" path needs no special role*
 
 ## Priorities called out explicitly by the product owner
-1. Logging a seizure must never get harder or slower because of the new entry-type picker or multi-pet context — it should be the fastest possible path, even one-handed under stress.
+1. Logging a seizure must never get harder or slower because of multi-pet context — one tap from a main screen to the seizure form (two dedicated floating buttons, scoped to the active pet; no entry-type menu, no in-flow pet picker), even one-handed under stress.
 2. Vets are shared, reusable contacts (many-to-many with pets, each link labeled with a role), not a flat field on one pet.
 3. The health-note entry type is intentionally minimal right now — resist adding structured fields until there's research on what's actually useful vs. noise.
 4. Non-admin members are log-and-view only. Every management screen needs a clean read-only state for them — not a disabled-looking one, and never a dead-end that implies they're missing something.
