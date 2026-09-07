@@ -23,6 +23,10 @@ and **both** are newer than the commit(s) being pushed. Docs/config-only pushes 
 Both files are gitignored and human-writable — that's the deliberate override for when Tom is
 the reviewer, or ran the tests himself.
 
+The gate is evaluated against the checkout the push comes from (the hook's `cwd`), while the two
+markers are always read from the main checkout. Run `.claude/hooks/test-gates.sh` after touching
+either hook — 15 assertions, including the worktree cases where the gate used to fail open.
+
 ## `review-verdict.md` format
 
 ```

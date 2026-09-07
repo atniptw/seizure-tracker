@@ -89,7 +89,7 @@ work.
 | 6 | Tech Lead → `reviewer` | "Review the #<n> diff. `/code-review high` (+ `security-review` if auth/rules/migration/export). Verdict → file." | `review-verdict.md` |
 | — | Tech Lead | `Status: CHANGES` → back to step 4 with the findings | — |
 | 7 | Tech Lead | verdict `PASS` + `last-green` fresh → merge branch to `main` with `Fixes #<n>`, `git push origin main` | commit on main |
-| — | hooks | `check-review-verdict.sh`, `check-green-marker.sh`, `scan-staged-secrets.sh` (pre), `watch-main-ci.sh` (post), `flag-unpushed-main.sh` (stop) fire automatically | — |
+| — | hooks | `check-review-verdict.sh`, `check-green-marker.sh`, `scan-staged-secrets.sh` (pre), `watch-main-ci.sh` (post), `flag-unpushed-main.sh` (stop), `session-brief.sh` (session start) fire automatically | — |
 | 8 | Tech Lead | CI green → issue auto-closed. Update `planning/` if design shifted (or spawn `backlog-owner`). `subagent-log.sh` has already journalled each specialist. | closed issue, updated docs |
 
 ### Variants
@@ -200,7 +200,8 @@ backlog looking finished.
   `backlog-owner`.
 - `.claude/commands/` — `standup`, `plan-feature`, `review`, `groom`, `ship` (ship is a Phase 2
   placeholder).
-- `.claude/hooks/` — `check-review-verdict.sh`, `check-green-marker.sh`, `subagent-log.sh`;
+- `.claude/hooks/` — `check-review-verdict.sh`, `check-green-marker.sh` (verified by
+  `test-gates.sh`), `subagent-log.sh`, `session-brief.sh`;
   wired in `.claude/settings.json` (PreToolUse `git push*` ×2, SubagentStop ×1).
 - `.claude/team/` — `README.md`, `log/` (local journal). `log/`, `review-verdict.md` and
   `last-green` are all gitignored.
