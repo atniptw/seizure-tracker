@@ -1,4 +1,33 @@
 {
+  "permissions": {
+    "deny": [
+      "Read(./app/google-services.json)",
+      "Read(./local.properties)",
+      "Read(./**/GoogleService-Info.plist)",
+      "Read(./**/key.properties)",
+      "Read(./**/*.jks)",
+      "Read(./**/*.keystore)",
+      "Read(./**/*.p8)",
+      "Read(./**/*.p12)",
+      "Read(./**/*.mobileprovision)"
+    ],
+    "allow": [
+      "Bash(./gradlew:*)",
+      "Bash(firebase emulators:exec:*)",
+      "Bash(gh issue create:*)",
+      "Bash(gh issue edit:*)",
+      "Bash(gh issue list:*)",
+      "Bash(gh issue view:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh run view:*)",
+      "Bash(gh run watch:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git rm:*)",
+      "Bash(npm ci:*)",
+      "Bash(npm test:*)"
+    ]
+  },
   "enabledPlugins": {
     "kotlin-lsp@claude-plugins-official": true,
     "claude-md-management@claude-plugins-official": true,
