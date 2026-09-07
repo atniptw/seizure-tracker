@@ -1,0 +1,46 @@
+name: Feature
+description: A capability described in a planning doc, scoped for one worktree.
+labels: ["type:feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Scope one worktree's worth of work. If it needs more than that, file an epic
+        and split it — see `planning/claude-dev-team.md` §5.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What doesn't work today, and who it hurts. Not the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: The intended change. Name the files/collections you expect to touch.
+    validations:
+      required: true
+  - type: input
+    id: doc-ref
+    attributes:
+      label: Planning-doc reference
+      description: File and section that authorises this scope, e.g. `migration.md §3.2`.
+      placeholder: "migration.md §3.2"
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Testable checkboxes. `qa` writes to these; `reviewer` checks against them.
+      value: |
+        - [ ]
+        - [ ]
+    validations:
+      required: true
+  - type: textarea
+    id: depends
+    attributes:
+      label: Dependencies
+      description: Issues or decisions that must land first. Leave blank if none.

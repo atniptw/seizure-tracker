@@ -1,0 +1,52 @@
+name: Bug
+description: Something in the shipped app behaves wrongly.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Bugs run `qa` first — a failing test that reproduces this, before any fix.
+        The clearer the repro, the faster that happens.
+  - type: textarea
+    id: repro
+    attributes:
+      label: Repro steps
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: textarea
+    id: expected-actual
+    attributes:
+      label: Expected vs actual
+      value: |
+        **Expected:**
+
+        **Actual:**
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Android
+        - iOS
+        - Both
+        - Firestore rules / backend
+    validations:
+      required: true
+  - type: input
+    id: build
+    attributes:
+      label: Build
+      description: Version, commit sha, or "debug build from <branch>".
+    validations:
+      required: true
+  - type: textarea
+    id: data-impact
+    attributes:
+      label: Data impact
+      description: Does this corrupt, lose, or expose household data? Say so explicitly — it changes priority.

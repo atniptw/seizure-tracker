@@ -1,0 +1,37 @@
+name: Spike
+description: A time-boxed investigation that ends in a decision, not code.
+labels: ["type:spike", "needs-decision"]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: The single question this spike answers. If there are two, file two spikes.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why now
+      description: What is blocked or at risk until this is answered.
+    validations:
+      required: true
+  - type: input
+    id: owner
+    attributes:
+      label: Decision owner
+      description: Who makes the call once the findings land.
+      value: "Tom"
+    validations:
+      required: true
+  - type: input
+    id: doc-ref
+    attributes:
+      label: Planning-doc reference
+      description: Where the answer gets written back.
+      placeholder: "architecture.md §0"
+  - type: input
+    id: timebox
+    attributes:
+      label: Time box
+      placeholder: "one session"
