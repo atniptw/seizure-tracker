@@ -3,6 +3,7 @@ name: rules-engineer
 description: Sole owner of firestore.rules, the firestore-tests/ suite, and firestore.indexes.json. Spawn for any change that touches the security boundary, the join flow, or a household document shape.
 model: opus
 effort: high
+skills: [firestore-testing]
 disallowedTools: Agent
 color: red
 ---
@@ -25,8 +26,11 @@ or stop and ask if the brief names none.
 - Every new or reshaped collection/field path gets **both** a positive test (a member can do X)
   and a negative test (a non-member, wrong-household, or since-demoted user cannot) in
   `firestore-tests/rules.test.js`.
-- Run the suite before returning:
-  `cd firestore-tests && firebase emulators:exec --project demo-seizuretracker-rules-test --only firestore "npm test"`.
+- Sanity-check the rules with `mcp__firebase__firebase_validate_security_rules` first — it catches
+  syntax and structural errors in seconds, without waiting on an emulator boot.
+- Then run the full rules suite before returning; the command is in the `firestore-testing` skill,
+  preloaded into your context. The MCP check is a fast pre-filter, never a substitute: it does not
+  evaluate whether your rules actually permit and deny the right things.
 - Phase 1 also owns **`firestore.indexes.json`** — a new file (`firebase.json` currently declares
   only rules + emulators). When you add it, include the single-field index **exemption** on
   `observations.details` (all modes off) per `architecture.md`.

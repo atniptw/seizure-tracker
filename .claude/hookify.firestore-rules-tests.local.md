@@ -13,11 +13,8 @@ conditions:
 
 This file is the entire security boundary for shared household health data (who can read/write
 a household, its `seizures` subcollection, and the `codeIndex` join-code mapping). CI runs the
-suite on push, but catch regressions locally first:
-
-```
-cd firestore-tests && firebase emulators:exec --project demo-seizuretracker-rules-test --only firestore "npm test"
-```
+suite on push, but catch regressions locally first — the rules-suite command is in the
+`firestore-testing` skill.
 
 If you added or reshaped a collection/field path, add both a positive test (a member can
 read/write) and a negative test (a non-member is denied) in `firestore-tests/rules.test.js`

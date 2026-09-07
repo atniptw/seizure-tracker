@@ -68,8 +68,12 @@ repo root configures it: Firestore on 8080, Auth on 9099) — wrap test runs in
 ```bash
 ./gradlew test                                                                    # NOT this on its own — fails without the emulator running
 firebase emulators:exec --project demo-seizuretracker-rules-test --only firestore,auth "./gradlew test --stacktrace"
-cd firestore-tests && npm ci && firebase emulators:exec --project demo-seizuretracker-rules-test --only firestore "npm test"
 ```
+
+**The `firestore-testing` skill is the canonical copy** of these commands — the rules suite, the
+compile-only run, the filtered-subset form, and the traps. It exists because this incantation was
+duplicated across this file, three agent personas and a hookify rule; when you need a command
+other than the one above, read it there rather than reconstructing it here.
 
 A plain `./gradlew build` right after either of those succeeds without the emulator (Gradle marks
 the test tasks UP-TO-DATE rather than re-running them) — that's what CI relies on; see
@@ -181,30 +185,24 @@ review), `rules-engineer` (owns `firestore.rules` + `firestore-tests/` + `firest
 `migration-lead` (drives `migration.md`, Phase 1 only), `backlog-owner` (curates GitHub Issues).
 Phase 2 adds `platform-parity` and `release-manager`.
 
-**Hub-and-spoke.** Subagents cannot talk to each other. Every handoff is an artifact the Tech
-Lead passes along: the GitHub issue, the worktree (`.claude/worktrees/issue-<n>-<slug>`),
-`.claude/team/review-verdict.md` (reviewer's PASS/CHANGES), `.claude/team/last-green` (qa's
-green-run marker), `.claude/team/log/<date>.md` (auto-appended by a SubagentStop hook,
-gitignored). Specialists never spawn other specialists — they report findings up.
+The flow, the label/milestone taxonomy and the rationale for all of it live in
+`planning/claude-dev-team.md` — read it rather than a summary here, which is how this section
+drifted from it before. Four things are non-negotiable and belong in front of you always:
 
-**Merge gate — enforced by hooks, hard-block.** A `git push` that updates `main` *and* touches
-code paths (`app/`, `lib/`, `test/`, `firestore.rules`, `firestore-tests/`) is refused unless
-**both** `.claude/team/review-verdict.md` says `Status: PASS` *and* `.claude/team/last-green`
-exists, and both are newer than the commit(s) being pushed (`check-review-verdict.sh`,
-`check-green-marker.sh`). Docs/config-only pushes are exempt. Those two files are gitignored and
-human-writable — that's the deliberate override when Tom is the reviewer or ran the tests himself.
-
-**Standard flow.** `/standup` → Tech Lead makes a worktree + brief → (`Plan` if the work is
-unclear) → `flutter-dev` implements → `qa` tests and writes the green marker → `reviewer` reviews
-and writes the verdict → Tech Lead merges to `main` with `Fixes #<n>` (no PRs — see the
-push-to-main memory) → CI → issue auto-closes. Bugs: `qa` writes a failing test first. Rules
-changes: `rules-engineer` implements and self-reviews the rules; the Tech Lead always shows the
-rules diff to Tom before pushing.
+1. **Hub-and-spoke.** Subagents cannot talk to each other, and never spawn each other (enforced:
+   `disallowedTools: Agent` on all six). Every handoff is an artifact the Tech Lead passes along —
+   the issue, the worktree, `review-verdict.md`, `last-green`, and the local `.claude/team/log/`.
+2. **The merge gate is a hard block.** A push updating `main` that touches `app/`, `lib/`,
+   `test/`, `firestore.rules` or `firestore-tests/` is refused unless `review-verdict.md` says
+   `Status: PASS` *and* `last-green` exists, both newer than the commits being pushed. Docs/config
+   pushes are exempt. Both files are gitignored and human-writable — the deliberate override when
+   Tom reviewed or ran the tests himself. Verify the hooks with `.claude/hooks/test-gates.sh`
+   after touching either.
+3. **Brief specialists with an absolute worktree path and branch**, and check their report says
+   which checkout they used. A subagent starts in *your* cwd, not the worktree; on issue #4 that
+   silently sent a mandated review at the wrong commit.
+4. **A rules diff always goes to Tom before it is pushed.**
 
 **Commands.** `/standup`, `/plan-feature <desc>`, `/review`, `/groom`, `/ship` (Phase 2).
-
-**Backlog.** GitHub Issues (`atniptw/seizure-tracker`). The issue-creation hold was **lifted
-2026-09-07** — `backlog-owner` (and the Tech Lead) may run `gh issue create` / `gh issue edit`
-directly. The backlog is seeded: labels, milestones and issue templates are live. Before filing,
-check the issue is not already tracked, and ground its scope in a planning doc or an explicit
-instruction from Tom. Label/milestone taxonomy is in `planning/claude-dev-team.md`.
+Issue creation is live (the hold lifted 2026-09-07); ground every issue in a planning doc or an
+explicit instruction from Tom, and check it isn't already tracked.

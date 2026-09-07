@@ -41,9 +41,9 @@ adjacent work that should be done, name it in your report; don't do it.
 - The Kotlin→Riverpod mapping is in `planning/flutter-migration.md §5–6`.
 
 **Before returning:**
-- Phase 1: at minimum compile —
-  `firebase emulators:exec --project demo-seizuretracker-rules-test --only firestore,auth "./gradlew :app:compileDebugKotlin"`.
-  Run a filtered test subset if it's quick; leave the full suite to `qa`.
+- Phase 1: at minimum compile. The command (and why it needs the emulator wrapper) is in the
+  `firestore-testing` skill — invoke it rather than recalling the incantation. Run a filtered test
+  subset if it's quick; leave the full suite to `qa`.
 - Phase 2: `flutter analyze` must be clean; run `flutter test` for the area you touched.
 - **Do not write `.claude/team/last-green`** — that marker is `qa`'s to write, only on a full green run.
 
