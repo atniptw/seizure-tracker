@@ -1,6 +1,7 @@
 # Backlog seed draft — first pass
 
-**Status:** DRAFT ONLY — no issues created (`gh issue create` not run; hold is still on).
+**Status:** SEEDED — the hold was lifted and these were filed as issues #4-#20 on 2026-09-07.
+Kept as the historical record of what was proposed and which planning section authorised each.
 **Prepared by:** backlog-owner · **Date:** 2026-09-07
 **Backlog state checked:** `gh issue list --state all` → 0 issues. `gh label list` → only GitHub
 defaults + `type:chore`/`type:feature`/`type:spike` exist (no `area:*`/status labels yet,

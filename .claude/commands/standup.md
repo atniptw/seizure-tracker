@@ -5,8 +5,7 @@ description: Team standup — open work, worktrees, CI status, and anything stra
 Produce a standup snapshot for the SeizureTracker team. **Read-only** — change nothing.
 
 1. **Backlog** — `gh issue list --state open --limit 40`, grouped by milestone; call out anything
-   labelled `blocked` or `needs-decision`. (If there are no issues yet, say so — the backlog is
-   on hold.)
+   labelled `blocked` or `needs-decision`.
 2. **In flight** — `git worktree list`; for each worktree branch, its last commit subject and
    whether it is ahead of `origin/main`.
 3. **CI** — `gh run list --branch main --limit 5` with status.

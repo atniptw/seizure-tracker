@@ -9,5 +9,5 @@ Spawn the `backlog-owner` subagent to reconcile GitHub Issues against `planning/
 - epics that need splitting
 - milestone / label corrections
 
-If issue creation is on hold (Tom still reviewing plans), it returns a **proposed** issue list
-rather than creating anything. Relay its report and the proposed changes.
+`backlog-owner` creates and edits issues directly (the hold was lifted 2026-09-07). Relay its
+report and the changes it made.

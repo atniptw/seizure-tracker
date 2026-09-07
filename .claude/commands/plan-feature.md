@@ -11,10 +11,8 @@ Acting as Tech Lead:
    relevant `planning/*.md` section.
 2. Turn the breakdown into a proposed issue set (parent + sub-issues) with `type:` / `area:`
    labels and a milestone per `planning/claude-dev-team.md`.
-   - If issue creation is **not** on hold: spawn `backlog-owner` to create them.
-   - If it **is** on hold: present the proposed set for Tom to approve.
-3. Create a worktree for the top slice — `EnterWorktree` with name `issue-<n>-<slug>` (or a
-   descriptive slug while issues are on hold).
+   Spawn `backlog-owner` to create them.
+3. Create a worktree for the top slice — `EnterWorktree` with name `issue-<n>-<slug>`.
 4. Write the brief for `flutter-dev`: scope, acceptance criteria, the planning-doc pointer, and
    any decisions already made.
 

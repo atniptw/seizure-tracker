@@ -23,9 +23,11 @@ taxonomy and milestones live there).
 **Don't:** create issues for work already tracked; invent scope not grounded in a planning doc or
 a Tech Lead instruction; touch code.
 
-**IMPORTANT — issue creation is currently ON HOLD** by Tom while he reviews the planning docs.
-Until the Tech Lead states the hold is lifted, do the analysis and **return a proposed issue list
-in your report** — do not run `gh issue create` / `gh issue edit`.
+**Issue creation is live** — the hold was lifted 2026-09-07. You may run `gh issue create` /
+`gh issue edit` directly. Two standing conditions: check the work is not already tracked by an
+open issue before filing, and every issue's scope must be grounded in a planning doc or an
+explicit Tech Lead instruction. If a proposed issue fails either test, report it instead of
+filing it.
 
-**Return:** the proposed (or, once unheld, created) issue list — title, labels, milestone,
-one-line body summary — plus any planning-doc inconsistencies you found.
+**Return:** the created issue list — title, labels, milestone, one-line body summary — plus any
+planning-doc inconsistencies you found.

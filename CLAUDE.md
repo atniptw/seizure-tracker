@@ -203,7 +203,8 @@ rules diff to Tom before pushing.
 
 **Commands.** `/standup`, `/plan-feature <desc>`, `/review`, `/groom`, `/ship` (Phase 2).
 
-**Backlog.** GitHub Issues (`atniptw/seizure-tracker`). **Issue creation is on hold** at Tom's
-request while he reviews the planning docs — `backlog-owner` proposes lists but does not run
-`gh issue create` until told the hold is lifted. Label/milestone taxonomy is in
-`planning/claude-dev-team.md`.
+**Backlog.** GitHub Issues (`atniptw/seizure-tracker`). The issue-creation hold was **lifted
+2026-09-07** — `backlog-owner` (and the Tech Lead) may run `gh issue create` / `gh issue edit`
+directly. The backlog is seeded: labels, milestones and issue templates are live. Before filing,
+check the issue is not already tracked, and ground its scope in a planning doc or an explicit
+instruction from Tom. Label/milestone taxonomy is in `planning/claude-dev-team.md`.

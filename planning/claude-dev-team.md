@@ -61,7 +61,7 @@ this repo's docs rather than restating architecture).
 | `reviewer` | opus | the pre-merge review of a worktree diff; writing `review-verdict.md` | editing source or tests; spawning agents |
 | `rules-engineer` | opus | `firestore.rules`, `firestore-tests/`, `firestore.indexes.json`; +/- test pair per path | leaving a path without a negative test |
 | `migration-lead` | opus | sequencing `migration.md`; live-data safety (backups before shape changes). **Phase 1 only** | doing the whole migration in one pass; skipping a backup |
-| `backlog-owner` | sonnet | GitHub Issues: seeding from docs, splitting epics, dedupe, re-milestone | `gh issue create` while the hold is on; inventing scope not in a doc |
+| `backlog-owner` | sonnet | GitHub Issues: seeding from docs, splitting epics, dedupe, re-milestone | filing work already tracked; inventing scope not in a doc |
 
 **Phase 2 additions** (not yet created):
 - `platform-parity` (sonnet) — the iOS↔Android delta: platform channels, `share_plus` behavior,
@@ -113,7 +113,7 @@ work.
 - Any risky merge — rules, data migration, auth — surfaced with the diff + verdict before push,
   even when the hooks are green.
 - Apple enrolment / signing one-time steps (memory `ios-signing-checklist`).
-- Roster / model / cost calls; lifting the issue-creation hold.
+- Roster / model / cost calls.
 
 ---
 
@@ -208,9 +208,8 @@ backlog looking finished.
   signing patterns (`.p8`, `.mobileprovision`, `GoogleService-Info.plist`, `ExportOptions.plist`).
 - `CLAUDE.md` — "Working as a team" section.
 
-**Not yet done:** GitHub labels/milestones/templates + seed issues (on hold); the Phase 2
-personas, `flutter-check` skill, and the `codegen-freshness` / `parity-reminder` hooks
-(switch on with Flutter).
+**Not yet done:** the Phase 2 personas, `flutter-check` skill, and the `codegen-freshness` /
+`parity-reminder` hooks (switch on with Flutter).
 
 ### Next: smoke test
 
