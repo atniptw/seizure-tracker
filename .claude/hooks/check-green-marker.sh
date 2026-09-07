@@ -19,18 +19,31 @@ case "$cmd" in
   *) exit 0 ;;
 esac
 
-cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || exit 0
+# Two roots, deliberately — see the long note in check-review-verdict.sh.
+#   $proj — main checkout, where the one canonical marker lives.
+#   $repo — the checkout whose push we are gating (follows Claude into a worktree).
+proj="${CLAUDE_PROJECT_DIR:-.}"
+repo=$(printf '%s' "$input" | jq -r '.cwd // ""')
+[ -n "$repo" ] && [ -d "$repo" ] || repo="$proj"
+cd "$proj" 2>/dev/null || exit 0
 
-branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+branch=$(git -C "$repo" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
 case "$cmd" in
-  *" main"*|*":main"*) targets_main=1 ;;
-  *) [ "$branch" = "main" ] && targets_main=1 || targets_main=0 ;;
+  *" main"*|*":main"*|*" --all"*|*" --mirror"*) targets_main=1 ;;
+  *)
+    if [ "$branch" = "main" ]; then
+      targets_main=1
+    else
+      upstream=$(git -C "$repo" rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || echo "")
+      case "$upstream" in */main) targets_main=1 ;; *) targets_main=0 ;; esac
+    fi
+    ;;
 esac
 [ "$targets_main" = "1" ] || exit 0
 
 range="origin/main..HEAD"
-git rev-parse origin/main >/dev/null 2>&1 || range="HEAD"
-changed=$(git diff --name-only $range 2>/dev/null || true)
+git -C "$repo" rev-parse origin/main >/dev/null 2>&1 || range="HEAD"
+changed=$(git -C "$repo" diff --name-only $range 2>/dev/null || true)
 code=$(printf '%s\n' "$changed" | grep -E '^(app/|lib/|test/|integration_test/|firestore\.rules$|firestore-tests/)' || true)
 [ -n "$code" ] || exit 0
 
@@ -47,7 +60,7 @@ This push changes code and would update main, but .claude/team/last-green does n
 exist. Have qa run the suite for this change — it writes the marker on a green run.
 If you ran the tests yourself and they passed, write a UTC timestamp to that file."
 
-head_time=$(git log -1 --format=%ct HEAD 2>/dev/null || echo 0)
+head_time=$(git -C "$repo" log -1 --format=%ct HEAD 2>/dev/null || echo 0)
 marker_time=$(stat -f %m "$marker" 2>/dev/null || stat -c %Y "$marker" 2>/dev/null || echo 0)
 if [ "${marker_time:-0}" -lt "${head_time:-0}" ]; then
   block "Merge gate: the green test marker is older than the commit(s) being pushed.
