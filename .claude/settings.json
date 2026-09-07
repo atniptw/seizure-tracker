@@ -41,24 +41,36 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/scan-staged-secrets.sh",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/scan-staged-secrets.sh",
             "if": "Bash(git commit*)",
             "timeout": 15,
             "statusMessage": "Scanning staged changes for secrets..."
           },
           {
             "type": "command",
-            "command": ".claude/hooks/check-review-verdict.sh",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/check-review-verdict.sh",
             "if": "Bash(git push*)",
             "timeout": 15,
             "statusMessage": "Merge gate: checking the review verdict..."
           },
           {
             "type": "command",
-            "command": ".claude/hooks/check-green-marker.sh",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/check-green-marker.sh",
             "if": "Bash(git push*)",
             "timeout": 15,
             "statusMessage": "Merge gate: checking the green test marker..."
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/session-brief.sh",
+            "timeout": 15,
+            "statusMessage": "Checking for stranded team state..."
           }
         ]
       }
@@ -68,7 +80,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/flag-unpushed-main.sh",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/flag-unpushed-main.sh",
             "timeout": 15,
             "statusMessage": "Checking for unpushed commits on main..."
           }
@@ -81,15 +93,17 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/watch-main-ci.sh gitpush",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/watch-main-ci.sh gitpush",
             "if": "Bash(git push*)",
+            "async": true,
             "timeout": 45,
             "statusMessage": "Checking for a freshly-triggered CI run on main..."
           },
           {
             "type": "command",
-            "command": ".claude/hooks/watch-main-ci.sh ghmerge",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/watch-main-ci.sh ghmerge",
             "if": "Bash(gh pr merge*)",
+            "async": true,
             "timeout": 45,
             "statusMessage": "Checking for a freshly-triggered CI run on main..."
           }
@@ -101,7 +115,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/subagent-log.sh",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/subagent-log.sh",
             "timeout": 15,
             "statusMessage": "Logging the subagent result to the team log..."
           }

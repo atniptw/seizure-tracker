@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
-# SubagentStop hook — append an entry to the team log each time a subagent
-# finishes, so the hub-and-spoke handoffs leave a paper trail in
-# .claude/team/log/<date>.md (committed; see planning/claude-dev-team.md).
+# SubagentStop hook — append an entry to the team log each time a named team
+# specialist finishes, so the hub-and-spoke handoffs leave a paper trail in
+# .claude/team/log/<date>.md (gitignored, local; see planning/claude-dev-team.md).
+#
+# Only the six personas are journalled. Logging every subagent — Explore, Plan,
+# general-purpose, whatever a one-off search spawned — buried the actual handoffs
+# in noise: 91KB in a single day, which is the file /standup is supposed to skim.
 #
 # Best-effort: if the transcript can't be parsed, log a bare entry and exit 0.
 # Never blocks.
@@ -9,6 +13,12 @@ set -uo pipefail
 
 input=$(cat)
 cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || exit 0
+
+agent=$(printf '%s' "$input" | jq -r '.agent_type // ""')
+case "$agent" in
+  flutter-dev|qa|reviewer|rules-engineer|migration-lead|backlog-owner|platform-parity|release-manager) ;;
+  *) exit 0 ;;
+esac
 
 logdir=".claude/team/log"
 mkdir -p "$logdir" 2>/dev/null || exit 0
@@ -40,7 +50,7 @@ fi
 [ -n "$result" ] || result="(result unavailable)"
 
 {
-  printf '\n## %s UTC — subagent\n' "$(date -u +%H:%M)"
+  printf '\n## %s UTC — %s\n' "$(date -u +%H:%M)" "$agent"
   printf '**Task:** %s\n\n' "$task"
   printf '**Result:** %s\n' "$result"
 } >> "$logfile" 2>/dev/null || true
