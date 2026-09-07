@@ -185,7 +185,7 @@ Phase 2 adds `platform-parity` and `release-manager`.
 Lead passes along: the GitHub issue, the worktree (`.claude/worktrees/issue-<n>-<slug>`),
 `.claude/team/review-verdict.md` (reviewer's PASS/CHANGES), `.claude/team/last-green` (qa's
 green-run marker), `.claude/team/log/<date>.md` (auto-appended by a SubagentStop hook,
-committed). Specialists never spawn other specialists — they report findings up.
+gitignored). Specialists never spawn other specialists — they report findings up.
 
 **Merge gate — enforced by hooks, hard-block.** A `git push` that updates `main` *and* touches
 code paths (`app/`, `lib/`, `test/`, `firestore.rules`, `firestore-tests/`) is refused unless

@@ -6,7 +6,7 @@ directory holds the ones that aren't a git branch or a GitHub issue.
 
 | File | Written by | Read by | Tracked? |
 |---|---|---|---|
-| `log/<date>.md` | `subagent-log.sh` (SubagentStop hook) | humans, `/standup` | **committed** — the team journal |
+| `log/<date>.md` | `subagent-log.sh` (SubagentStop hook) | humans, `/standup` | gitignored — local journal |
 | `review-verdict.md` | `reviewer` persona | `check-review-verdict.sh` merge-gate hook | gitignored (ephemeral) |
 | `last-green` | `qa` persona | `check-green-marker.sh` merge-gate hook | gitignored (ephemeral) |
 

@@ -29,7 +29,11 @@ firestore-debug.log
 firebase-debug.log
 ui-debug.log
 
-# Claude dev-team — ephemeral merge-gate markers (see planning/claude-dev-team.md).
-# The team journal .claude/team/log/ IS committed; only these two are local state.
+# Claude dev-team — local-only state (see planning/claude-dev-team.md).
+# The merge-gate markers are ephemeral. The subagent journal is excluded too: it
+# holds raw subagent output, which shouldn't land permanently in the history of a
+# repo that touches real health data. /standup still reads it from the working copy.
 .claude/team/review-verdict.md
 .claude/team/last-green
+.claude/team/log/*
+!.claude/team/log/.gitkeep

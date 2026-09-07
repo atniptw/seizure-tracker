@@ -43,7 +43,7 @@ along — auditable, survives context summarization, and a hook can gate on it.
 
   shared desk (.claude/team/ + GitHub + worktrees):
    • the GitHub issue            • the worktree .claude/worktrees/issue-N-slug
-   • review-verdict.md (reviewer)  • last-green (qa)   • log/<date>.md (auto, committed)
+   • review-verdict.md (reviewer)  • last-green (qa)   • log/<date>.md (auto, local)
 ```
 
 ---
@@ -202,8 +202,8 @@ backlog looking finished.
   placeholder).
 - `.claude/hooks/` — `check-review-verdict.sh`, `check-green-marker.sh`, `subagent-log.sh`;
   wired in `.claude/settings.json` (PreToolUse `git push*` ×2, SubagentStop ×1).
-- `.claude/team/` — `README.md`, `log/` (committed journal). `review-verdict.md` + `last-green`
-  are gitignored.
+- `.claude/team/` — `README.md`, `log/` (local journal). `log/`, `review-verdict.md` and
+  `last-green` are all gitignored.
 - Extended `hookify.block-sensitive-git-add` + `hookify.sensitive-android-files` with iOS
   signing patterns (`.p8`, `.mobileprovision`, `GoogleService-Info.plist`, `ExportOptions.plist`).
 - `CLAUDE.md` — "Working as a team" section.
