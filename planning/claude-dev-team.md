@@ -107,6 +107,24 @@ work.
   retool for Flutter; `platform-parity` + `release-manager` activate; `backlog-owner`
   re-milestones open issues.
 
+### Retro (periodic, `/retro`)
+
+`/standup` reports the current state; `/retro` looks back over a period and changes how the team
+works. It reads the archived verdicts (`.claude/team/verdicts/`), the CI history, closed issues
+and the journal, and writes `.claude/team/retro/<date>.md` — committed, because a retro's actions
+are checked by the *next* retro and have to outlive the session that wrote them.
+
+Two rules keep it from becoming a diary. It opens by going through the previous retro's actions
+one at a time (done / not done / abandoned, with evidence), and it closes with **at most three**
+actions, each with an owner and a stated way the next retro will know whether it happened.
+
+The highest-signal input is CI: because the merge gate requires a local green run before a code
+push, **a failed run on `main` means the local step missed something CI caught**. The retro's job
+is to say which of three things happened — CI checks something no local step does (e.g. `build`
+runs lint, `last-green` only covers `test`), the marker overstated what ran, or it was an
+environment-only failure like the emulator timeout flake — because only the first two have
+actions, and they are different actions.
+
 ### Human touch points (Tom, not the team)
 
 - `needs-decision` issues — the Tech Lead stops and asks.
@@ -198,7 +216,7 @@ backlog looking finished.
 
 - `.claude/agents/` — `flutter-dev`, `qa`, `reviewer`, `rules-engineer`, `migration-lead`,
   `backlog-owner`.
-- `.claude/commands/` — `standup`, `plan-feature`, `review`, `groom`, `ship` (ship is a Phase 2
+- `.claude/commands/` — `standup`, `plan-feature`, `review`, `groom`, `retro`, `ship` (ship is a Phase 2
   placeholder).
 - `.claude/hooks/` — `check-review-verdict.sh`, `check-green-marker.sh` (verified by
   `test-gates.sh`), `subagent-log.sh`, `session-brief.sh`;

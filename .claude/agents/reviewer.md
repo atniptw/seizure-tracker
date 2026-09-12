@@ -36,11 +36,24 @@ match, `cd` to the briefed path; if the brief names no path, stop and ask for on
 the data-flow pattern); missing test coverage; and anything expensive to reverse once shipped.
 Do not rewrite the code yourself.
 
-**Write your verdict** to `.claude/team/review-verdict.md`, overwriting it, in exactly this shape:
+**Write your verdict twice**, with identical content:
+
+1. `.claude/team/review-verdict.md`, overwriting it — this is the merge gate's input.
+2. `.claude/team/verdicts/<branch>.md` — the durable copy. The gate file is overwritten by the
+   next review, so without this the record of *why* each change was allowed to merge is gone
+   within a day. `/retro` reads this directory, and it is the only place process problems
+   accumulate: the "Process note" on issue #4's verdict — recording that the mandated
+   `/code-review` pass had reviewed the wrong commit — would have been lost, and with it the
+   only evidence of a gate that wasn't working.
+
+Use exactly this shape:
 
 ```
 Status: PASS
+Issue: #<n> — <title>
 Branch: <branch name>
+Commit: <sha under review>
+Author: <the persona that wrote the change, or Tom>
 Reviewed: <UTC timestamp, e.g. 2026-09-06T21:00:00Z>
 Scope: <one line — what the diff does>
 
@@ -50,6 +63,12 @@ Scope: <one line — what the diff does>
 
 ## Notes
 <anything the Tech Lead or Tom should weigh>
+
+## Process note
+<only when something about the *process* went wrong — a mandated step that didn't run or ran
+against the wrong target, a gate that had to be bypassed, a brief that was missing what you
+needed. Omit the heading entirely when there is nothing. This is the section /retro looks for,
+so it is worth a sentence even when the code itself was fine.>
 ```
 
 `Status: PASS` only when nothing `[blocking]` remains. Otherwise `Status: CHANGES` with the list

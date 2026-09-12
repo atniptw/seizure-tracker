@@ -9,6 +9,20 @@ directory holds the ones that aren't a git branch or a GitHub issue.
 | `log/<date>.md` | `subagent-log.sh` (SubagentStop hook) | humans, `/standup` | gitignored — local journal |
 | `review-verdict.md` | `reviewer` persona | `check-review-verdict.sh` merge-gate hook | gitignored (ephemeral) |
 | `last-green` | `qa` persona | `check-green-marker.sh` merge-gate hook | gitignored (ephemeral) |
+| `verdicts/<branch>.md` | `reviewer` persona | humans, `/retro` | **committed** — why each change merged |
+| `retro/<date>.md` | `/retro` | humans, the next `/retro` | **committed** — process history |
+
+## Why verdicts are archived twice
+
+`review-verdict.md` is overwritten by the next review, so on its own it holds the current verdict
+and no history. That is fine for a gate — the gate only cares about the change in front of it —
+but it means the record of *why* each change was allowed onto `main` survives about a day. The
+`verdicts/` copy is the durable one, and it is where process problems accumulate: issue #4's
+verdict recorded that the mandated `/code-review` pass had reviewed the wrong commit, which was
+the only evidence that a required gate step wasn't working. `/retro` reads this directory.
+
+`retro/` is the other half. A retro's actions are checked by the *next* retro, so they have to
+outlive the session that wrote them.
 
 ## Merge gate
 

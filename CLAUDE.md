@@ -203,6 +203,9 @@ drifted from it before. Four things are non-negotiable and belong in front of yo
    silently sent a mandated review at the wrong commit.
 4. **A rules diff always goes to Tom before it is pushed.**
 
-**Commands.** `/standup`, `/plan-feature <desc>`, `/review`, `/groom`, `/ship` (Phase 2).
+**Commands.** `/standup`, `/plan-feature <desc>`, `/review`, `/groom`, `/retro`, `/ship` (Phase 2).
+`/standup` is the daily state snapshot; `/retro` is periodic and looks backwards — what shipped,
+where the process leaked, and at most three changes, checked by the next retro. Both are in
+`.claude/commands/`.
 Issue creation is live (the hold lifted 2026-09-07); ground every issue in a planning doc or an
 explicit instruction from Tom, and check it isn't already tracked.

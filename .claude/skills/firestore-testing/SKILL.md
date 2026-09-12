@@ -53,6 +53,19 @@ A plain `./gradlew build` immediately afterwards succeeds *without* the emulator
 the test tasks UP-TO-DATE rather than re-running them. That is what CI relies on
 (`.github/workflows/ci.yml`), not a sign the tests ran standalone.
 
+## What CI checks that a green run does not
+
+CI (`.github/workflows/ci.yml`) ends with `./gradlew build`, which runs **lint** and assembles
+every variant on top of the tests. A green marker is written after `./gradlew test`. So a lint
+error or a release-variant assembly break passes the local gate and fails on `main` — the one
+category of failure the merge gate structurally cannot catch.
+
+Nothing has hit this yet (no historical failure at CI's `Build` step; all four were the emulator
+test step or CI bootstrapping). If you want the local run to cover it, the command is
+`"./gradlew build --stacktrace"` inside the same emulator wrapper — slower, because it lints and
+assembles as well. Until that is the agreed gate, say in your report which of the two you ran,
+so nobody reads a green marker as covering lint.
+
 ## Known traps
 
 - **The timeout flake is not a regression.** The emulator-backed suite runs sequentially in one
