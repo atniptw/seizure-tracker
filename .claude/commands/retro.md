@@ -26,11 +26,21 @@ Prefer cheap structured sources; go to the journal last and selectively.
 
 - **Shipped** — `git log --oneline` over the period on `main`; closed issues
   (`gh issue list --state closed --search "closed:>=<start>"`); any tags.
-- **Gate integrity** — every archived verdict in `.claude/team/verdicts/` in the period. For each:
-  `Status`, `Author`, whether any `[blocking]` finding was recorded, and anything under a
-  "Process note" heading. A verdict whose `Author` is Tom rather than a persona is a deliberate
-  human override — fine, but count them: a run of overrides means the gate is being worked around
-  rather than used.
+- **Gate integrity** — the verdicts for changes that merged in the period. `reviewer` posts each
+  one as a comment on the issue it reviewed, so read them from there:
+
+  ```bash
+  gh issue list --state closed --search "closed:>=<start>" --json number
+  gh issue view <n> --comments          # the verdict is the comment headed "review verdict"
+  ```
+
+  For each: `Status`, `Author`, whether any `[blocking]` finding was recorded, and anything under a
+  "Process note" heading — that last one is the point of reading them at all. A verdict whose
+  `Author` is Tom rather than a persona is a deliberate human override; fine individually, but
+  count them, because a run of overrides means the gate is being worked around rather than used.
+
+  **A merged change with no verdict comment at all is itself a finding** — either it took the
+  docs-only exemption (check whether it should have) or it went round the gate.
 - **CI — treat every failure on `main` as a local-gate escape, not just a red run.** This is the
   highest-signal section of the retro. The merge gate only lets a code push through when
   `last-green` says the suite passed locally, so a failure *after* that push means the local step

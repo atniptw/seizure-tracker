@@ -9,20 +9,28 @@ directory holds the ones that aren't a git branch or a GitHub issue.
 | `log/<date>.md` | `subagent-log.sh` (SubagentStop hook) | humans, `/standup` | gitignored — local journal |
 | `review-verdict.md` | `reviewer` persona | `check-review-verdict.sh` merge-gate hook | gitignored (ephemeral) |
 | `last-green` | `qa` persona | `check-green-marker.sh` merge-gate hook | gitignored (ephemeral) |
-| `verdicts/<branch>.md` | `reviewer` persona | humans, `/retro` | **committed** — why each change merged |
 | `retro/<date>.md` | `/retro` | humans, the next `/retro` | **committed** — process history |
 
-## Why verdicts are archived twice
+Plus one artifact that isn't a file here at all: the **durable copy of each verdict**, posted by
+`reviewer` as a comment on the issue it reviewed (`gh issue comment`).
 
-`review-verdict.md` is overwritten by the next review, so on its own it holds the current verdict
-and no history. That is fine for a gate — the gate only cares about the change in front of it —
-but it means the record of *why* each change was allowed onto `main` survives about a day. The
-`verdicts/` copy is the durable one, and it is where process problems accumulate: issue #4's
-verdict recorded that the mandated `/code-review` pass had reviewed the wrong commit, which was
-the only evidence that a required gate step wasn't working. `/retro` reads this directory.
+## Where verdicts live, and why not here
 
-`retro/` is the other half. A retro's actions are checked by the *next* retro, so they have to
-outlive the session that wrote them.
+`review-verdict.md` is overwritten by the next review. That is right for a gate — the gate only
+cares about the change in front of it — but it means the reasoning behind each merge survives
+about a day, and that reasoning is where process problems show up. Issue #4's verdict recorded
+that the mandated `/code-review` pass had reviewed the wrong commit; that was the only evidence a
+required gate step wasn't working.
+
+The durable copy goes on **the issue**, not into this directory. A verdict is what a PR review
+would be if this repo used PRs; since it pushes straight to `main`, the issue is the review
+surface. Keeping ~10KB of review prose per change in the source tree would also go stale badly —
+findings cite `file:line` against a diff that moves on — and it is the same argument that took the
+subagent journal out of git. `/retro` reads them back with `gh issue view <n> --comments`.
+
+`retro/<date>.md` *is* committed, and the distinction is deliberate: a retro is about how the team
+works rather than about one diff, so it has no issue to hang off, it does not go stale the way a
+line-cited review finding does, and its whole value is that the next retro can find it.
 
 ## Merge gate
 

@@ -110,9 +110,11 @@ work.
 ### Retro (periodic, `/retro`)
 
 `/standup` reports the current state; `/retro` looks back over a period and changes how the team
-works. It reads the archived verdicts (`.claude/team/verdicts/`), the CI history, closed issues
-and the journal, and writes `.claude/team/retro/<date>.md` — committed, because a retro's actions
-are checked by the *next* retro and have to outlive the session that wrote them.
+works. It reads the verdicts (posted by `reviewer` as comments on the issues they reviewed), the
+CI history, closed issues and the journal, and writes `.claude/team/retro/<date>.md` — committed,
+because a retro's actions are checked by the *next* retro and have to outlive the session that
+wrote them. Verdicts deliberately do *not* live in the repo: they are per-diff review prose that
+goes stale, and the issue is the review surface this repo gives up by not using PRs.
 
 Two rules keep it from becoming a diary. It opens by going through the previous retro's actions
 one at a time (done / not done / abandoned, with evidence), and it closes with **at most three**

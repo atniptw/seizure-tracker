@@ -36,17 +36,26 @@ match, `cd` to the briefed path; if the brief names no path, stop and ask for on
 the data-flow pattern); missing test coverage; and anything expensive to reverse once shipped.
 Do not rewrite the code yourself.
 
-**Write your verdict twice**, with identical content:
+**Publish your verdict in two places**, with identical content:
 
-1. `.claude/team/review-verdict.md`, overwriting it — this is the merge gate's input.
-2. `.claude/team/verdicts/<branch>.md` — the durable copy. The gate file is overwritten by the
-   next review, so without this the record of *why* each change was allowed to merge is gone
-   within a day. `/retro` reads this directory, and it is the only place process problems
-   accumulate: the "Process note" on issue #4's verdict — recording that the mandated
-   `/code-review` pass had reviewed the wrong commit — would have been lost, and with it the
-   only evidence of a gate that wasn't working.
+1. **`.claude/team/review-verdict.md`**, overwriting it — the merge gate's input. Local and
+   gitignored; the next review overwrites it.
+2. **A comment on the issue under review** — `gh issue comment <n> --body-file <file>`. This is
+   the durable copy. A verdict is what a PR review would be if this repo used PRs; since it
+   pushes straight to `main`, the issue is where that record belongs. Without it the reasoning
+   behind every merge evaporates with the next review: the "Process note" on issue #4's verdict,
+   recording that its own mandated `/code-review` pass had reviewed the wrong commit, was the only
+   evidence that a required gate step wasn't working, and it was one review away from being gone.
 
-Use exactly this shape:
+   Write the body to a temp file and pass `--body-file`; a verdict is far too long for `--body`.
+   Head the comment with a line saying what it is and which commit it reviewed. `/retro` reads
+   these comments back with `gh issue view <n> --comments`.
+
+   If the change has no issue, say so in your report and skip the comment — don't invent an issue
+   to hang it on. (A change with no issue is almost always docs or config, which the gate exempts,
+   so it should not have needed a verdict in the first place.)
+
+Use exactly this shape for both:
 
 ```
 Status: PASS
