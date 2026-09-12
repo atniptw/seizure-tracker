@@ -10,6 +10,7 @@ const H = require('./helpers');
 const { PROJECT_ID } = H;
 const backup = require('../backup');
 const restore = require('../restore');
+const { commitInChunks, BATCH_SIZE } = require('../lib/firestore');
 
 jest.setTimeout(60000);
 
@@ -290,5 +291,103 @@ describe('restore.js', () => {
       process.env.FIRESTORE_EMULATOR_HOST = saved;
       delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
     }
+  });
+});
+
+// --- QA additions (issue #5): coverage gaps found during mutation-probing --------------------
+// See the QA report on #5 for the mutation-probe table these close or explain. Not a rewrite of
+// the implementer's tests above — added alongside them.
+describe('coverage gaps (QA, #5)', () => {
+  test('a household with an empty collection (no healthNotes at all) dumps and restores cleanly', async () => {
+    // In Firestore an empty collection does not exist, so this household legitimately has no
+    // healthNotes/vets/petVetLinks/members subcollection at all — the case --require-expected
+    // softening (lib/firestore.js EXPECTATIONS comment) depends on being indistinguishable from
+    // "the crawl missed it" only by intent, not by crashing either script.
+    const h = db.collection('households').doc('h-sparse');
+    await h.set({ name: 'Sparse', members: ['u1'], createdAtMillis: 1 });
+    await h.collection('seizures').doc('s1').set({ petId: 'p1', timestampMillis: 1 });
+    // No healthNotes, vets, petVetLinks, members, pets docs at all.
+
+    const out = H.tmpDir();
+    const { code: backupCode, out: backupLog } = await H.run(backup.main, [PROJECT, `--out=${out}`, '--expect=legacy']);
+    expect(backupCode).toBe(0); // warns, does not fail, without --require-expected
+    expect(backupLog).toContain('expected collection is absent from the dump: households/*/healthNotes');
+
+    const dump = JSON.parse(H.fs.readFileSync(H.newestDump(out), 'utf8'));
+    expect(dump.manifest.counts).toEqual({ households: 1, 'households/h-sparse/seizures': 1, codeIndex: 0 });
+    expect(dump.manifest.counts['households/h-sparse/healthNotes']).toBeUndefined();
+
+    const { code: restoreCode, out: restoreLog } = await H.run(restore.main, [H.newestDump(out), PROJECT, '--commit']);
+    expect(restoreCode).toBe(0);
+    expect(restoreLog).toContain('OK: every restored collection matches the dump manifest');
+
+    // The restore must not have fabricated an empty healthNotes collection along the way.
+    expect((await h.collection('healthNotes').listDocuments()).length).toBe(0);
+    expect((await h.collection('seizures').doc('s1').get()).exists).toBe(true);
+  });
+
+  test('restore deletes a document under the household that exists in the target but was never in the dump at all', async () => {
+    // Distinct from the implementer's "leaves a stray doc in an already-dumped collection" case
+    // (round-trip test above, s-stray under seizures, which IS a known collection): this document
+    // sits in a collection the dump never saw or discovered at backup time, added to the target
+    // only *after* the dump was taken — the shape a real rollback hits if someone writes new data
+    // between the dump and the restore.
+    await H.seedLegacyHousehold(db);
+    const out = H.tmpDir();
+    await H.run(backup.main, [PROJECT, `--out=${out}`, '--household=h-legacy']);
+    const dumpFile = H.newestDump(out);
+
+    await db.doc('households/h-legacy/postDumpCollection/late1').set({ hello: 'added after the dump' });
+
+    const { code, out: log } = await H.run(restore.main, [dumpFile, PROJECT, '--commit']);
+    expect(code).toBe(0);
+    expect(log).toContain('OK: every restored collection matches the dump manifest');
+
+    // README's restore procedure ("delete the named collections, re-write every document") must
+    // match this: the whole household subtree is deleted before rewriting from the dump, so a
+    // doc added after the dump and before the restore does not survive it.
+    expect((await db.doc('households/h-legacy/postDumpCollection/late1').get()).exists).toBe(false);
+  });
+
+  test('a second --commit restore of the same dump is a no-op', async () => {
+    await H.seedLegacyHousehold(db);
+    const out = H.tmpDir();
+    await H.run(backup.main, [PROJECT, `--out=${out}`, '--household=h-legacy']);
+    const dumpFile = H.newestDump(out);
+
+    const first = await H.run(restore.main, [dumpFile, PROJECT, '--commit']);
+    expect(first.code).toBe(0);
+    const afterFirst = await H.snapshotEncoded(db, db.doc('households/h-legacy'));
+
+    const second = await H.run(restore.main, [dumpFile, PROJECT, '--commit']);
+    expect(second.code).toBe(0);
+    expect(second.out).toContain('OK: every restored collection matches the dump manifest');
+    const afterSecond = await H.snapshotEncoded(db, db.doc('households/h-legacy'));
+
+    expect(afterSecond).toEqual(afterFirst);
+  });
+
+  test('commitInChunks writes and deletes correctly across a batch boundary, not just within one batch', async () => {
+    // Every fixture above tops out around 15 documents, far under BATCH_SIZE (400), so the loop in
+    // lib/firestore.js never iterates more than once anywhere in the suite above — a bug that only
+    // drops or mis-writes the second (or a trailing partial) chunk would pass every test above.
+    // This exercises the real BATCH_SIZE with enough documents to force multiple chunks.
+    const total = BATCH_SIZE * 2 + 7; // two full batches plus one partial tail batch
+    const col = db.collection('households').doc('h-batch').collection('probe');
+    const refs = Array.from({ length: total }, (_, i) => col.doc(`d${i}`));
+
+    const written = await commitInChunks(db, refs, (batch, ref) => batch.set(ref, { i: refs.indexOf(ref) }));
+    expect(written).toBe(total);
+
+    const snap = await col.get();
+    expect(snap.size).toBe(total);
+    // The tail batch (the partial one) specifically made it in, not just the full leading batches.
+    const lastId = `d${total - 1}`;
+    expect((await col.doc(lastId).get()).exists).toBe(true);
+
+    const deleteRefs = (await col.listDocuments());
+    const deleted = await commitInChunks(db, deleteRefs, (batch, ref) => batch.delete(ref));
+    expect(deleted).toBe(total);
+    expect((await col.get()).size).toBe(0);
   });
 });
