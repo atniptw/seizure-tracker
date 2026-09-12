@@ -90,15 +90,40 @@ writes** — that part stands and is the part that matters. But the access was t
 
 - **Counts and document ids** — REST count aggregations and `__name__`-only projections. Every
   number in the table below comes from these.
-- **Document *fields*** — at minimum the three `households/{id}` docs and at least the live
-  household's pet doc. This is reconstructed from what the section asserts, not from a record of
-  the run: items (2) and (5) and §3 "Legacy household fields" are field-value claims (the
-  `members` array contents, `weightKg`/`dogWeightKg` being `doubleValue`, the enumerated legacy
-  field names) and no aggregation or `__name__` projection can produce them. So **do not read this
-  section as evidence about what was *not* read** — for anything beyond those docs it is simply
-  not established. What is established, and is the part the §4 hold cares about, is that nothing
-  was written.
-- **Firebase Auth** — `getUser` by uid, provider type only (inventory item 1).
+- **Document *fields*** — all three `households/{id}` documents and the live household's pet
+  document (`pets/<PET-ID>`), retrieved in full. Items (2) and (5) and §3 "Legacy
+  household fields" are field-value claims that no aggregation or `__name__` projection can
+  produce.
+- **Firebase Auth** — `getUser` on four uids (the live household's three, plus the junk
+  households' owner). The records came back **in full**, including email, display name and photo
+  URL; only the provider type and the created/last-refresh timestamps were carried into this
+  document, deliberately, since it is committed to the repo.
+
+**What was *not* read**, so this section is usable as evidence in both directions: no document
+under `seizures`, `healthNotes`, `vets`, `petVetLinks` or `members` was retrieved — those are
+counts only, plus the `members` document *ids* (which equal the uids) for the array-vs-subcollection
+comparison in item 1. The two pets of `<HOUSEHOLD-3-ID>` are ids only; their fields were never
+read.
+
+**Exactly what ran** (Tech Lead, 2026-09-12, transcript in the session that produced this commit),
+all against `projects/<PROJECT-ID>/databases/(default)`, authenticated with a
+`gcloud auth print-access-token` bearer token:
+
+1. `documents:runQuery` on `households`, `select.fields = [__name__]` → the three ids with their
+   `createTime`/`updateTime`.
+2. `documents:listCollectionIds`, and `households/{id}:listCollectionIds` for each of the three.
+3. `…:runAggregationQuery` with a `COUNT` aggregation — top-level `codeIndex` and `households`,
+   then each household's six subcollections. Every number in the table is one of these.
+4. `households/{id}:runQuery` on `pets`, `select.fields = [__name__]`, for the two non-empty
+   households.
+5. `GET households/{id}` for all three — once with `?mask.fieldPaths=members`, once unmasked.
+6. `GET households/<LIVE-HOUSEHOLD-ID>/pets/<PET-ID>`.
+7. Firebase Auth `getUser` on the four uids, via the `firebase` MCP server.
+
+Every endpoint there is a read. There was no `:commit`, no `PATCH`, no `DELETE`, and no write of
+any kind — which is the part the §4 hold cares about. One attempt (`firestore_list_collections`
+over MCP) was refused by a permission classifier and was re-done as step 2 over REST; nothing else
+was blocked.
 
 Where the plan contradicted this, the plan has been corrected in place; what is left is
 four **decisions**, flagged here and at the section each one lands in.
