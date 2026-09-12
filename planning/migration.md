@@ -1,6 +1,8 @@
 # Migration Plan — shipped Firestore shape → target backend
 
-**Status:** draft for discussion · **Last updated:** 2026-08-30
+**Status:** draft for discussion; **Phase 1 in progress** — `backup.js` / `restore.js` built
+and emulator-rehearsed (issue #5), the real-data rehearsal still pending · **Last updated:**
+2026-09-12
 **Companion docs:** `architecture.md` (target data model, §0 gap list), `product-spec.md`
 (features, entities, "what the next release contains"), `security-privacy.md` (roles, join
 mechanics, §8 rule changes), `flutter-migration.md` (the client rewrite this sequences before)
@@ -152,7 +154,9 @@ backfill writes.
 - **A matching `tools/migrate/restore.js`**, and a written restore procedure (see §5). A
   restore is: delete the affected collections, re-write from the dump, compare counts against
   the manifest. Rehearse it once against the emulator so it isn't first attempted under
-  pressure.
+  pressure. **Done** (issue #5): the emulator round-trip is an automated test, and the
+  procedure is written out command-by-command in `tools/migrate/README.md`. The rehearsal
+  against a dump of the *real* data still has to happen before the window.
 - **The backfill script is idempotent and `--dry-run` by default.** Node + Firebase Admin
   SDK (bypasses Security Rules), run locally by Tom against the prod project. Deterministic
   doc ids everywhere possible (observations reuse legacy ids; `private/config` is a fixed
@@ -346,12 +350,46 @@ becomes admin-gated (`product-spec.md §4`). Rules: `exportLog/{id}` — `create
 Three Node entrypoints, all Admin SDK (a service-account key for the prod project,
 `GOOGLE_APPLICATION_CREDENTIALS`, gitignored — steps in the tool's README):
 
-- **`backup.js`** — recursive read of `households/{id}` + every subcollection + `codeIndex/*`
-  → timestamped local JSON + a per-collection count manifest.
-- **`restore.js`** — from a dump: delete the named collections, re-write every doc, compare
-  counts to the manifest, report. See "Restore procedure" below.
-- **`migrate.js`** — `--area=roles|joincode|observations|meds|all`, `--dry-run` (default) vs
-  `--commit`, `--household=<id>`, `--admins=<uid>,<uid>` (required for the roles area).
+- **`backup.js`** *(built — issue #5)* — recursive read of `households/{id}` + every
+  subcollection + `codeIndex/*` → timestamped local JSON + a per-collection count manifest.
+  Read-only; it has no write path. Subcollections are **discovered** (`listCollections()`), not
+  read off a hardcoded list, so a collection added later is dumped rather than missed — and any
+  collection the migration doesn't know about is reported.
+- **`restore.js`** *(built — issue #5)* — from a dump: delete the named collections, re-write
+  every doc, then re-read and compare **counts and document-id sets** against the manifest
+  (counts alone would pass a doc written under the wrong id), exiting non-zero on any mismatch.
+  `--dry-run` by default; `--commit` to write, and `--allow-prod` on top of that against a live
+  project. See "Restore procedure" below.
+- **`migrate.js`** *(not built — issues #6/#7/#9/#10)* — `--area=roles|joincode|observations|meds|all`,
+  `--dry-run` (default) vs `--commit`, `--household=<id>`, `--admins=<uid>,<uid>` (required for
+  the roles area).
+
+**Four things the plan above didn't anticipate, found while building the dump/restore half.**
+All four are now handled in the tooling; they're recorded here because §5's restore procedure
+and §7's count assertion lean on them:
+
+1. **A restore cannot reproduce an integral double.** The Node Admin SDK's serializer encodes
+   any JS number passing `Number.isSafeInteger()` as a Firestore *integer*, with no way to force
+   a double — so a stored `12.0` comes back as `12`. Both scripts report every affected field by
+   path (`manifest.integralDoubleFields`) rather than letting it surface during verification. The
+   only double in the shipped shape is `Pet.weightKg`; the Android SDK widens an integer back to
+   a `Double?` on read and Firestore's numeric comparisons span both types, so the impact is a
+   recorded type change, not data loss. Non-integral doubles, `-0`, `NaN` and the infinities
+   round-trip exactly. The same limit will apply to anything `migrate.js` writes.
+2. **`codeIndex` is a top-level collection, not a household subcollection.** A restore scoped to
+   one household must not clear another household's join code, so `--codeindex=scoped` (the
+   default) only touches codes that are in the dump or point at a household in it, and a dump
+   narrowed with `--household` narrows its `codeIndex` to match. Moot at one household today;
+   not moot the first time this runs against a second one.
+3. **"Assert the expected collections are present" can't be a hard failure by default.** An
+   empty Firestore collection does not exist, so a household that has never logged a health note
+   genuinely has no `healthNotes` collection and that is indistinguishable from a crawl that
+   missed it. `backup.js` warns by default and fails only under `--require-expected`, which the
+   pre-window rehearsal passes (there the expected contents are known).
+4. **A document can hold subcollections while having no fields of its own.** A `collection.get()`
+   crawl skips those and silently drops their whole subtree; a pet hard-deleted while its
+   medications remained is exactly that shape (the orphan quirk §3's `archived` flag closes). The
+   crawl uses `listDocuments()` and records them in `manifest.missingParents`.
 
 **`migrate.js` properties:**
 - **Idempotent:** deterministic doc ids where possible (observations reuse legacy ids;
@@ -395,10 +433,22 @@ of entries is the accepted fallback.
 
 - **Rehearsal against real data (required, pre-window):** `backup.js` prod → load the dump
   into the local Firebase emulator → run all areas → `--area=verify` → re-run for
-  idempotency → run `restore.js` against the dump and confirm it round-trips.
+  idempotency → run `restore.js` against the dump and confirm it round-trips. The dump/restore
+  half of this is a written transcript in `tools/migrate/README.md` ("The real-data rehearsal")
+  — run it as-is; it needs the prod service-account key and nothing else. The backfill half
+  waits on `migrate.js`.
 - Emulator fixture: also keep a hand-seeded "legacy shape" household (old collections, `code`
   field, no roles, embedded meds, a member-array uid with no profile doc, a doc with
-  `timestampMillis == 0`) for the fast unit-style assertions.
+  `timestampMillis == 0`) for the fast unit-style assertions. **Built** — it lives in
+  `tools/migrate/__tests__/helpers.js` and is reused by the dump/restore round-trip test; add
+  the backfill assertions to the same fixture rather than seeding a second one. It also carries
+  two medication entries differing only in `notes` (the §9 content-hash case), a fieldless pet
+  owning a medications subcollection, and a collection the migration has never heard of.
+- The tooling's own tests are **their own Node + Jest package** (`tools/migrate/`), not part of
+  `firestore-tests/`: that package tests `firestore.rules` with the client SDK and is owned by
+  `rules-engineer`, while this one uses `firebase-admin` and deliberately bypasses rules.
+  `.github/workflows/ci.yml` needs two steps added for it (see the tool's README) — not yet
+  wired.
 - Every rule change ships with matching `firestore-tests/` cases in the same commit (CI
   already runs that suite — `.github/workflows/ci.yml`), including the new carve-outs: a
   joiner can't rename the household in the join write; a member's own profile write can't
@@ -471,6 +521,10 @@ Settled for a two-person closed-track deployment:
 
 - **Backup mechanism** — a local Admin-SDK JSON dump (`tools/migrate/backup.js`), **not**
   `gcloud firestore export` (which needs Blaze + a GCS bucket the project doesn't have).
+- **Dump fidelity** — the dump is typed JSON (integers as strings, `Timestamp`/`GeoPoint`/
+  `Bytes`/`DocumentReference`/`NaN`/`-0` tagged), so it round-trips every Firestore type
+  **except** a double whose value is a safe integer, which the Node Admin SDK cannot write
+  back as a double. Reported per field, accepted rather than worked around (§5).
 - **Rollback** — lossless only before the first write from the new build; fix-forward after
   (§5). No automated reverse backfill; manual re-entry of a handful of post-cutover entries
   is the accepted fallback at this scale.

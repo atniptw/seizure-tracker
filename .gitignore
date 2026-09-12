@@ -43,3 +43,12 @@ ui-debug.log
 .claude/local/
 # Git worktrees the team creates per issue — each is its own checkout, never part of this one.
 .claude/worktrees/
+
+# Migration tooling (tools/migrate/ — read its README). Neither of these may ever be committed.
+# A dump is a complete, unencrypted copy of two people's health record; the service-account key is
+# unrestricted read/write on the live project. security-privacy.md §2.1/§2.3 treats both as assets
+# equivalent to the database itself, and a leak cannot be undone by a later commit.
+tools/migrate/dumps/
+dump-*.json
+*service-account*.json
+*serviceAccount*.json

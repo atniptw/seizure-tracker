@@ -1,0 +1,21 @@
+{
+  "name": "seizuretracker-migrate",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pre-cutover backup/restore tooling for the SeizureTracker Firestore migration (migration.md \u00a75).",
+  "scripts": {
+    "test": "jest --runInBand"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.6.0"
+  },
+  "devDependencies": {
+    "jest": "^30.4.2"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/*.test.js"
+    ]
+  }
+}
