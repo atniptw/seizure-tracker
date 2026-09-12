@@ -1,19 +1,51 @@
 'use strict';
 
-/** Minimal `--key=value` / `--flag` parsing. No dependency worth adding for this. */
-function parseArgs(argv) {
+/**
+ * Minimal `--key=value` / `--flag` parsing. No dependency worth adding for this.
+ *
+ * `valueFlags` names the flags that MUST carry `=<value>`. Without that list a flag written in
+ * the space-separated form every other CLI trains (`--only households/h1/seizures`) parses as
+ * `{only: true}` plus a stray positional, and a `true` means "no value" to `list()`, which means
+ * "select everything" to restore.js — i.e. a typo silently widens the delete scope from one
+ * collection to a whole household. So a value-taking flag given with no `=` is a hard error, and
+ * so is an empty value: `--only=` is the same hazard written differently.
+ */
+function parseArgs(argv, { valueFlags = [] } = {}) {
+  const needsValue = new Set(valueFlags);
   const flags = {};
   const positional = [];
   for (const arg of argv) {
     if (!arg.startsWith('--')) { positional.push(arg); continue; }
     const body = arg.slice(2);
     const eq = body.indexOf('=');
-    if (eq === -1) flags[body] = true;
-    else flags[body.slice(0, eq)] = body.slice(eq + 1);
+    if (eq === -1) {
+      if (needsValue.has(body)) {
+        throw new Error(
+          `--${body} takes a value and must be written --${body}=<value>. ` +
+            `A space-separated "--${body} <value>" parses as a bare flag with the value dropped, ` +
+            'which would silently change the scope of this run.'
+        );
+      }
+      flags[body] = true;
+      continue;
+    }
+    const key = body.slice(0, eq);
+    const value = body.slice(eq + 1);
+    if (needsValue.has(key) && value === '') {
+      throw new Error(`--${key}= was given with an empty value. Pass a real value or drop the flag.`);
+    }
+    flags[key] = value;
   }
   return { flags, positional };
 }
 
+/**
+ * A comma-separated flag value as a trimmed list.
+ *
+ * `undefined` (flag absent) is the only input that yields `[]`. `true` cannot reach here for a
+ * flag declared in `valueFlags` — parseArgs rejects it — but the guard stays so a caller that
+ * forgets to declare one gets an empty list rather than `"true"` as a literal value.
+ */
 const list = (value) =>
   value === undefined || value === true || value === ''
     ? []

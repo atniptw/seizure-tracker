@@ -38,8 +38,11 @@ Prod:      gcloud auth application-default login  (preferred), then
            or GOOGLE_APPLICATION_CREDENTIALS=/abs/path/key.json node backup.js --project=<real-project>
 `;
 
+/** Flags that must be written --flag=value. See lib/cli.js parseArgs for why this list exists. */
+const VALUE_FLAGS = ['project', 'household', 'out', 'label', 'expect'];
+
 async function main(argv) {
-  const { flags } = parseArgs(argv);
+  const { flags } = parseArgs(argv, { valueFlags: VALUE_FLAGS });
   if (flags.help || flags.h) { log(USAGE); return 0; }
 
   const { db, emulatorHost, projectId, credential } = initFirestore({ project: flags.project });
@@ -61,8 +64,15 @@ async function main(argv) {
   let householdCount = 0;
   for (const ref of householdRefs) {
     const node = await crawlDocument(db, ref, report);
-    if (!node.exists && wanted.length) {
-      throw new Error(`--household=${ref.id} does not exist in project ${projectId}`);
+    // "Does not exist" has to mean "no document AND no subcollections". A household doc that holds
+    // subcollections but no fields of its own is precisely the case the crawl uses listDocuments()
+    // to preserve (migration.md §5 item 4); refusing to dump one because `snap.exists` is false
+    // would refuse the household that most needs dumping.
+    if (!node.exists && wanted.length && Object.keys(node.collections).length === 0) {
+      throw new Error(
+        `--household=${ref.id} does not exist in project ${projectId}: no document, and no ` +
+          'subcollections beneath it either.'
+      );
     }
     collections.households[ref.id] = node;
     if (node.exists) householdCount += 1;
@@ -142,7 +152,16 @@ async function main(argv) {
     collections,
   };
 
-  fs.mkdirSync(outDir, { recursive: true });
+  // A dump is an unencrypted household health record (security-privacy.md §2.1/§2.3), so the
+  // directory holding it is owner-only too — a 600 file inside a 755 directory still advertises
+  // the filenames, and the filenames name the project. `mode` applies on creation only, so an
+  // existing directory is checked and reported rather than silently trusted.
+  fs.mkdirSync(outDir, { recursive: true, mode: 0o700 });
+  const dirMode = fs.statSync(outDir).mode & 0o777;
+  if (dirMode & 0o077) {
+    warn(`${outDir} is mode ${dirMode.toString(8)}, readable outside your user account.`);
+    warn(`  Dump files themselves are 0600. Consider: chmod 700 ${outDir}`);
+  }
   const label = flags.label && flags.label !== true ? `-${String(flags.label).replace(/[^\w.-]/g, '_')}` : '';
   const file = path.join(outDir, `dump-${projectId}-${stamp}${label}.json`);
   fs.writeFileSync(file, `${JSON.stringify(dump, null, 2)}\n`, { mode: 0o600 });

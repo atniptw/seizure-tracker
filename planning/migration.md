@@ -1,9 +1,11 @@
 # Migration Plan — shipped Firestore shape → target backend
 
-**Status:** draft for discussion; **Phase 1 in progress** — `backup.js` / `restore.js` built
-and emulator-rehearsed (issue #5), the real-data rehearsal still pending; the live project
-inventoried read-only 2026-09-12 (§2), which moved several things in here from "assumed" to
-"known" · **Last updated:** 2026-09-12
+**Status:** draft for discussion; **Phase 1 in progress** — `backup.js` / `restore.js` built,
+emulator-rehearsed and through pre-merge review (issue #5: six blocking findings fixed, all six
+regression-tested — the verification gate now compares field *contents*, not only document
+counts and ids), the real-data rehearsal still pending; the live project inventoried read-only
+2026-09-12 (§2), which moved several things in here from "assumed" to "known" ·
+**Last updated:** 2026-09-12
 The three live member uids were resolved against Firebase Auth by provider on 2026-09-12, which
 settled the admin set (§2 inventory item 1).
 **Open, waiting on Tom** (each flagged in place): what happens to the two test-junk households
@@ -82,8 +84,23 @@ window ends at the first write from the new build (§4); after that the path is 
 
 ### The live project, inventoried read-only (2026-09-12)
 
-Taken with REST count aggregations and `__name__`-only projections — no document bodies read, no
-writes. Where the plan contradicted this, the plan has been corrected in place; what is left is
+**Method, corrected 2026-09-12** (the #5 review caught the original sentence claiming less access
+than this section demonstrably had, which weakened it precisely as evidence). **Read-only, no
+writes** — that part stands and is the part that matters. But the access was two kinds, not one:
+
+- **Counts and document ids** — REST count aggregations and `__name__`-only projections. Every
+  number in the table below comes from these.
+- **Document *fields*** — at minimum the three `households/{id}` docs and at least the live
+  household's pet doc. This is reconstructed from what the section asserts, not from a record of
+  the run: items (2) and (5) and §3 "Legacy household fields" are field-value claims (the
+  `members` array contents, `weightKg`/`dogWeightKg` being `doubleValue`, the enumerated legacy
+  field names) and no aggregation or `__name__` projection can produce them. So **do not read this
+  section as evidence about what was *not* read** — for anything beyond those docs it is simply
+  not established. What is established, and is the part the §4 hold cares about, is that nothing
+  was written.
+- **Firebase Auth** — `getUser` by uid, provider type only (inventory item 1).
+
+Where the plan contradicted this, the plan has been corrected in place; what is left is
 four **decisions**, flagged here and at the section each one lands in.
 
 | Household | Created / updated | seizures | healthNotes | pets | vets | petVetLinks | `members` subcoll | `members` array |
@@ -130,8 +147,11 @@ but not manage). That is a device question, not an Auth one, and Auth can't answ
 refresh being 2026-08-17 is suggestive, not proof.
 
 **(2) Two of the three households are test junk — open: leave them, or delete them later.**
-`<HOUSEHOLD-2-ID>` and `<HOUSEHOLD-3-ID>` were both created 08-16 by one uid
-(`<UID-ANON-2>`, **anonymous**, Auth account created <CREATED-AT>) that
+`<HOUSEHOLD-2-ID>` and `<HOUSEHOLD-3-ID>` both carry a creation timestamp of 08-16 and both have exactly one uid in
+their `members` array, the same one in each: `<UID-ANON-2>` (**anonymous**, Auth
+account created <CREATED-AT>). **"Created by" is inference, not evidence** — Firestore
+records no creator; the reading is that the sole member of a one-member household is whoever
+created it, which is how the app's create flow works. That uid
 appears in none of the live household's three — a second, different anonymous identity from the
 live household's `<UID-ANON>`, and by the same reasoning also unreachable. They hold 2 of the 3 `codeIndex` entries and real documents (3
 seizures/health notes between them, 2 pets, 2 vets, 2 links). **Tom has decided nothing about
@@ -584,11 +604,17 @@ explicit `--project`, since ADC carries no project id. Steps in the tool's READM
   Read-only; it has no write path. Subcollections are **discovered** (`listCollections()`), not
   read off a hardcoded list, so a collection added later is dumped rather than missed — and any
   collection the migration doesn't know about is reported.
-- **`restore.js`** *(built — issue #5)* — from a dump: delete the named collections, re-write
-  every doc, then re-read and compare **counts and document-id sets** against the manifest
-  (counts alone would pass a doc written under the wrong id), exiting non-zero on any mismatch.
-  A dry run unless `--commit` is passed (there is no `--dry-run` flag to type); `--allow-prod`
-  is required on top of `--commit` against a live project. See "Restore procedure" below.
+- **`restore.js`** *(built — issue #5)* — from a dump: **empty the households in the dump's
+  scope**, including collections the dump never saw (the delete set is crawled from the *live*
+  tree, which is what makes it a rollback rather than a merge over whatever is there), re-write
+  every doc, then re-read and compare **counts, document-id sets and every field value** against
+  the dump, exiting non-zero on any mismatch. Counts alone would pass a doc written under the
+  wrong id; ids alone would pass a codec regression that wrote `{}` for every doc, so the gate
+  deep-compares content too, tolerating only the integral-double retype in item 1 below and
+  reporting every field it tolerated. A dry run unless `--commit` is passed (there is no
+  `--dry-run` flag to type); `--allow-prod` is required on top of `--commit` against a live
+  project. **Irreversible once committed, with no outer transaction** — see "Restore procedure"
+  below and the README's "If a restore is interrupted".
 - **`migrate.js`** *(not built — issues #6/#7/#9/#10)* — `--area=roles|joincode|observations|meds|all`,
   a dry run unless `--commit` (same convention as `restore.js`: no `--dry-run` flag),
   `--household=<id>` (three households exist — §2 inventory item 2), `--admins=<uid>[,<uid>...]`
@@ -668,9 +694,25 @@ the §7 cleanup delete refuses to run unless it passes.
 
 ### Restore procedure
 
-If a backfill goes wrong *before cutover* (no new-app writes yet): `restore.js <dump>` for
-the affected collections, redeploy the previous rules, redeploy the previous app. Confirm
-counts against the manifest.
+**The commands are a written transcript in `tools/migrate/README.md` ("Restore procedure") — run
+it as-is rather than reconstructing it here.** Three things from it belong in the plan because the
+plan is what gets read first:
+
+If a backfill goes wrong *before cutover* (no new-app writes yet): **dump the current state
+first** (`backup.js --label=pre-rollback`, read-only, seconds), then dry-run `restore.js <dump>`,
+then commit it, then redeploy the previous rules and the previous app. The restore is
+**irreversible** — it deletes every document in the households the dump names, including
+collections the dump never saw, before writing anything — so the pre-rollback dump is the only
+copy of whatever the backfill wrote. §9 accepts losing post-dump entries; it does not require
+losing them.
+
+**If a restore is interrupted**, the answer is **re-run the identical command, including
+`--commit`.** `commitInChunks` has no outer transaction, so a failure in the delete pass exits 2
+with an arbitrary subset of the households deleted and nothing written back; the restore is
+idempotent (live-tree-crawled deletes, fixed-path `set()` writes), so a second run completes a
+partial one and a second run of a complete one is a no-op. Both are covered by the test suite.
+This is the same "crash-safe by re-run" property as the `migrate.js` areas below, but it is worth
+stating separately: `restore.js` is the one with a destructive first pass.
 
 If something is discovered wrong *after cutover*: you can no longer restore losslessly (new
 entries exist only in the new shape). Options are (a) fix forward with a corrective

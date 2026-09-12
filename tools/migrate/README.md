@@ -7,7 +7,7 @@ that project exists and a restore from it has been rehearsed.**
 | Script | What it does | Destructive? |
 |---|---|---|
 | `backup.js` | Recursive Admin SDK read of `households/{id}` + every subcollection + `codeIndex/*` → a timestamped JSON dump + a per-collection count manifest | No. Read-only; it has no write path at all. |
-| `restore.js` | From a dump: delete the named collections, re-write every document, re-read and compare counts **and document-id sets** against the manifest, exit non-zero on any mismatch | **Yes, but only with `--commit`.** Without `--commit` it plans the work and writes nothing — that is the default, and there is no `--dry-run` flag to type. A live project additionally needs `--allow-prod`. |
+| `restore.js` | From a dump: **empty the households in the dump's scope** — including collections the dump never saw — then re-write every document, re-read and compare **counts, document-id sets and every field value** against the dump, exit non-zero on any mismatch | **Yes, but only with `--commit`, and it is irreversible.** Without `--commit` it plans the work and writes nothing — that is the default, and there is no `--dry-run` flag to type. A live project additionally needs `--allow-prod`. |
 
 `migrate.js` (the `--area=roles|joincode|observations|meds` backfill) is **not here yet** — it is
 issues #6 / #7 / #9 / #10. This package delivers the dump/restore half independently.
@@ -143,8 +143,10 @@ node backup.js --project=<id> [options]
 
 Subcollections are **discovered** with `listCollections()`, not read off a hardcoded list, so a
 collection added later is dumped rather than silently missed — and any collection the migration
-does not know about is reported as `collection not known to this migration`. The known-expected
-set is asserted on top of that:
+does not know about is reported as `collection not known to this migration`, at **any** depth
+(a collection below the deepest level the migration has a list for, e.g.
+`households/{h}/observations/{o}/attachments`, is reported because its whole level is unknown).
+The known-expected set is asserted on top of that:
 
 - `--expect=legacy` (the shipped shape): `seizures`, `healthNotes`, `pets`, `vets`, `petVetLinks`,
   `members`.
@@ -177,15 +179,47 @@ node restore.js <dump.json> --project=<id> [--commit] [options]
   --allow-project-mismatch Required when the dump's project id differs from the target
 ```
 
-It deletes, re-writes, then **re-reads and verifies**: per-collection counts against the dump's
-manifest, plus a document-id set diff (counts alone would pass a document written under the wrong
-id). Any mismatch is listed and the exit code is 1. Writes and deletes are batched in chunks of
-400 (`migration.md §5`; Firestore's hard limit is 500).
+**What it removes.** With `--only` unset, the delete set is built by crawling the **live**
+household, not by reading the dump — so it removes collections the dump never contained, including
+anything a backfill created (an `observations` collection, say). That is correct and necessary for
+a rollback, and it is what makes the result *the dump* rather than the dump merged over whatever is
+there. It also means a restore is **not** a partial operation: it empties the households in the
+dump's scope and rewrites them.
+
+**Every value-taking flag must be written `--flag=value`.** `--only households/h1/seizures` with a
+space is rejected, not parsed — as a bare `--only` it used to mean "everything", which in the one
+script that deletes turned a one-collection restore into a full-household one. `--only` takes
+**collection** paths (an odd number of segments); a document path like `households/h1` is rejected,
+because it would select `h1`'s subcollections but not `h1`'s own document. The `Scope:` banner line
+always names the selection, including when the selection is "everything in the dump".
+
+**What the verification gate proves.** It deletes, re-writes, then re-reads and compares the result
+against the dump three ways:
+
+1. **Per-collection counts** against `manifest.counts`.
+2. **The document-id set** — counts alone would pass a document written under the wrong id.
+3. **Every field value of every document it wrote**, deep-compared against the dump's own
+   contents. Field names, nesting, array order, and Firestore types (integer vs double vs
+   timestamp vs bytes) all have to match. The verify crawl already returns each document in the
+   dump's encoded format, so this is a comparison and not a second read.
+
+The **one** tolerated difference is the integral double below, and every tolerated field is
+reported by path and cross-checked against `manifest.integralDoubleFields`. Any other difference
+is listed and the exit code is 1. Writes and deletes are batched in chunks of 400
+(`migration.md §5`; Firestore's hard limit is 500) — that bounds documents per commit, not request
+bytes, which is ample for this dataset but is a document-count guard only.
+
+The dump is also fully **decoded during planning**, before anything is deleted, so a malformed or
+hand-edited dump is refused while the target is still untouched — and a dry run catches it too.
 
 `codeIndex` is a global collection, not a household subcollection, so `--codeindex=scoped` (the
 default) only clears codes that are in the dump or point at a household in the dump; anything else
 is left in place and reported. A dump narrowed with `--household` narrows its `codeIndex` to match,
-so it stays a self-consistent unit.
+so it stays a self-consistent unit. `--codeindex=none` clears nothing and still rewrites (and
+verifies) the codes the dump holds. A dump taken with `--no-codeindex` holds no codes at all, so
+**restoring one is refused unless you pass `--codeindex=none`** — under any other mode it would
+delete the live join codes of the households in the dump and have nothing to write back, leaving
+them advertising a `code` that resolves to nothing.
 
 ### One thing it cannot round-trip: an integral double
 
@@ -201,9 +235,40 @@ and Firestore's own numeric comparisons span integer and double. Non-integral do
 zero, `NaN` and the infinities all round-trip exactly. See the comment on
 `collectIntegralDoubles` in `lib/codec.js`.
 
+### The rest of the fidelity inventory
+
+Everything else in the shipped and target shapes round-trips exactly — field names containing
+dots, slashes or spaces; integers past `Number.MAX_SAFE_INTEGER`; empty maps and arrays; arrays of
+maps; and user maps whose single key is literally `@int` or `@map` (the codec double-wraps those).
+The remaining limits, all deliberate:
+
+- **A `DocumentReference` is re-rooted.** It is encoded as its project-relative path and decoded
+  against the *target* instance, so restoring a dump into a different project or database silently
+  re-points the reference at that project. Correct for the rehearsal (prod dump → emulator) and
+  there are no references anywhere in the shipped shape, but it is not a byte-for-byte round trip.
+- **An unrecognised Firestore value type aborts the dump** rather than being silently dropped.
+  `firebase-admin ^13.6.0` ships `VectorValue`, which nothing here uses; a document containing one
+  would fail `backup.js` with `Unsupported Firestore value of type …`. That is the intended
+  behaviour — a dump that quietly omits a field is worse than no dump.
+- **A hand-edited dump is validated on decode, not trusted.** A `@double` payload that is neither a
+  JSON number nor one of `"NaN"`, `"Infinity"`, `"-Infinity"`, `"-0"` aborts the restore. Without
+  that check, the plausible edit `{"@double": "12.5"}` restored `weightKg` as the *string* `"12.5"`,
+  which the Kotlin `Double?` field then reads as `null` on the device.
+
 ## Restore procedure (`migration.md §5`)
 
-**Before cutover** (no writes from the new build yet — a lossless rollback):
+### Read this first — what the commit step actually does
+
+> **`restore.js --commit` is irreversible.** It does not "roll back to" the dump. It **deletes
+> every document in the households the dump names** — including collections the dump never saw,
+> such as an `observations` collection a backfill just created — and then writes the dump's
+> documents in their place. After the delete pass has committed, the only copy of what was there
+> is whatever dump *you* took beforehand. There is no undo, no transaction around it, and no
+> server-side backup on the Spark plan (`security-privacy.md §2.4`).
+
+So the procedure has three steps, not two, and step 1 is not optional.
+
+### Before cutover (no writes from the new build yet)
 
 ```bash
 cd tools/migrate
@@ -211,20 +276,58 @@ unset FIRESTORE_EMULATOR_HOST
 # Credentials: `gcloud auth application-default login` (preferred), or export
 # GOOGLE_APPLICATION_CREDENTIALS=~/.config/seizuretracker/prod-service-account.json
 
-# 1. Dry run first (no --commit = nothing is written). Read the plan and the counts.
-node restore.js dumps/<the-window-dump>.json --project=<prod-project-id> --allow-prod
+# ---- 1. Dump the CURRENT state first. Read-only, takes seconds, and it is the only copy of
+#         whatever the backfill wrote. Do not skip this because the rollback is "to a known good
+#         dump" — the state you are about to destroy is the state you may need to diff against.
+node backup.js --project=<prod-project-id> --label=pre-rollback --expect=target
+# -> keep the filename. This is your undo for the undo.
 
-# 2. Commit. Must end with "OK: every restored collection matches the dump manifest".
+# ---- 2. Dry run the restore (no --commit = nothing is written). ----
+node restore.js dumps/<the-window-dump>.json --project=<prod-project-id> --allow-prod
+# -> read three things before continuing:
+#      * "Scope: households=[...] codeIndex=... only=..."  — is that the set you meant?
+#      * "Plan: delete N document reference(s), write M document(s)" — N is what is about to be
+#        destroyed. If N is much larger than M, something is in the target that is not in the
+#        dump; understand what before you commit.
+#      * the per-collection count table.
+
+# ---- 3. Commit. Same command plus --commit. IRREVERSIBLE. ----
 node restore.js dumps/<the-window-dump>.json --project=<prod-project-id> --allow-prod --commit
+# -> must end with "OK: every restored collection matches the dump manifest — per-collection
+#    counts, the document-id set, and a field-by-field value compare of all N document(s)."
 ```
 
-Then redeploy the previous `firestore.rules` and the previous app build. If step 2 prints mismatches
-instead, **stop** — do not deploy anything, keep the dump, and work out why.
+Then redeploy the previous `firestore.rules` and the previous app build. If step 3 prints
+mismatches instead, **stop** — do not deploy anything, keep both dumps, and work out why.
 
-**After cutover** there is no lossless restore: entries logged by the new build exist only in the
-new shape, so a restore from a pre-window dump loses them. The options are (a) fix forward with a
-corrective `migrate.js` pass, or (b) restore and manually re-enter whatever was logged since the
-dump. At two users that manual re-entry is the accepted fallback (`migration.md §9`).
+### If a restore is interrupted
+
+`restore.js` commits batches sequentially with **no outer transaction** (`lib/firestore.js`
+`commitInChunks`). If the delete pass fails or the process is killed part-way — a dropped network,
+a `^C`, a batch error — you are left with an arbitrary subset of the households deleted and
+nothing written back, and the script exits 2. This is the one state where it matters that you know
+what to do next, so:
+
+> **Re-run the identical command, including `--commit`.** That is safe and it is the correct
+> recovery. The restore is idempotent: the delete pass re-crawls the live tree (whatever is left of
+> it) and the write pass re-writes the dump's documents at fixed paths with `set()`, so a second run
+> completes a partial one and a second run of a *complete* one is a no-op. Both are covered by the
+> test suite (`a second --commit restore of the same dump is a no-op`,
+> `__tests__/roundtrip.test.js`).
+
+Do **not** reach for `--only` to "finish off" what the first run missed, and do not hand-edit the
+dump. Neither is needed, and `--only` narrows the delete pass too, so it can leave the stale
+documents the full run would have removed.
+
+If the *write* pass is what failed, the same answer applies for the same reason.
+
+### After cutover
+
+There is no lossless restore: entries logged by the new build exist only in the new shape, so a
+restore from a pre-window dump loses them. The options are (a) fix forward with a corrective
+`migrate.js` pass, or (b) restore and manually re-enter whatever was logged since the dump. At two
+users that manual re-entry is the accepted fallback (`migration.md §9`) — and step 1 above is what
+turns "re-enter it from memory" into "re-enter it from a file".
 
 ## The real-data rehearsal (`migration.md §5` "Testing the tooling")
 
@@ -265,7 +368,8 @@ unset GOOGLE_APPLICATION_CREDENTIALS        # if you used the key-file path. ADC
 #   /Users/tom/.nvm/versions/node/v24.13.0/bin/firebase emulators:start --project $EMU --only firestore
 export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
 node restore.js "$PROD_DUMP" --project=$EMU --allow-project-mismatch --commit
-# -> must end: "OK: every restored collection matches the dump manifest, document for document."
+# -> must end: "OK: every restored collection matches the dump manifest — per-collection
+#    counts, the document-id set, and a field-by-field value compare of all N document(s)."
 
 # ---- 4. Prove it from a clean slate too — this is the step that matters ----
 curl -X DELETE "http://127.0.0.1:8080/emulator/v1/projects/$EMU/databases/(default)/documents"
@@ -297,6 +401,19 @@ Its own Node + Jest package, run against the emulator like `firestore-tests/`:
 cd tools/migrate && npm ci
 firebase emulators:exec --project demo-seizuretracker-rules-test --only firestore "npm test"
 ```
+
+Four suites:
+
+- `__tests__/roundtrip.test.js` — the dump/restore round trip against the legacy-shape fixture,
+  plus QA's coverage-gap cases (empty collections, post-dump documents, re-running a `--commit`
+  restore, a multi-batch commit).
+- `__tests__/review-regressions.test.js` — one case per finding of the #5 pre-merge review:
+  the `--no-codeindex` refusal, `--codeindex=none` symmetry, the single-scope key set, content
+  verification (fault-injected at the batch layer, so the dump on disk genuinely disagrees with
+  the target), the `--only` parse guards and banner, the unknown-collection depth hole, the
+  `@double` payload guard, and the dump directory's mode.
+- `__tests__/codec.test.js` — the codec's decode guards and the content comparator, no emulator.
+- `__tests__/credentials.test.js` — credential resolution (ADC vs key file), no emulator.
 
 `__tests__/roundtrip.test.js` seeds the "legacy shape" household from `migration.md §5` — old
 collections, a `code` field, no roles, an embedded medications array (including two entries that

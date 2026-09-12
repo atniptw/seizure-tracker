@@ -94,6 +94,17 @@ function decodeValue(value, firestore) {
       if (raw === 'Infinity') return Infinity;
       if (raw === '-Infinity') return -Infinity;
       if (raw === '-0') return -0;
+      // Anything else must be a JSON number. Without this check a hand-edited dump holding
+      // {"@double": "12.5"} — the plausible edit, since the four cases above are themselves
+      // strings — restores weightKg as the *string* "12.5", the verification gate's content
+      // compare would have to be the only thing that notices, and the Kotlin `Double?` field
+      // then deserialises as null on the device. Refuse instead.
+      if (typeof raw !== 'number') {
+        throw new Error(
+          `Cannot decode dump value {"@double": ${JSON.stringify(raw)}}: a @double payload must be ` +
+            'a JSON number, or one of the strings "NaN", "Infinity", "-Infinity", "-0".'
+        );
+      }
       return raw;
     }
     case '@time':
@@ -153,9 +164,9 @@ function collectIntegralDoubles(encoded, pathPrefix, acc) {
   }
   const tag = taggedKey(encoded);
   if (tag === '@double') {
-    const raw = encoded['@double'];
-    const negativeZero = raw === 0 && 1 / raw === 1 / -0;
-    if (typeof raw === 'number' && Number.isSafeInteger(raw) && !negativeZero) acc.push(pathPrefix);
+    // Shared with restore.js's content compare (isIntegralDouble, below) so the field the dump
+    // reports as retyped and the field the verification gate tolerates are the same field.
+    if (isIntegralDouble(encoded['@double'])) acc.push(pathPrefix);
     return acc;
   }
   if (tag === '@map') return collectIntegralDoubles(encoded['@map'], pathPrefix, acc);
@@ -167,3 +178,129 @@ function collectIntegralDoubles(encoded, pathPrefix, acc) {
 }
 
 module.exports.collectIntegralDoubles = collectIntegralDoubles;
+
+/**
+ * The one class of value a Node Admin SDK restore cannot reproduce: a `@double` whose payload is a
+ * safe integer (see `collectIntegralDoubles` above) comes back as a Firestore integer. Shared by
+ * the dump-time reporter and the restore-time content compare so the two cannot drift.
+ */
+const isIntegralDouble = (raw) =>
+  typeof raw === 'number' && Number.isSafeInteger(raw) && !(raw === 0 && 1 / raw === -Infinity);
+
+/** Structural equality for plain JSON — used on tag payloads, which hold no nested encoded values. */
+function plainEqual(a, b) {
+  if (Object.is(a, b)) return true;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    return a.length === b.length && a.every((v, i) => plainEqual(v, b[i]));
+  }
+  if (isPlainObject(a) && isPlainObject(b)) {
+    const ka = Object.keys(a);
+    const kb = Object.keys(b);
+    return ka.length === kb.length
+      && ka.every((k) => Object.prototype.hasOwnProperty.call(b, k) && plainEqual(a[k], b[k]));
+  }
+  return false;
+}
+
+/** How a value reads in a mismatch line. */
+function describeEncoded(value) {
+  const tag = taggedKey(value);
+  if (tag === '@map') return 'a map';
+  if (tag) return `${tag} ${JSON.stringify(value[tag])}`;
+  if (Array.isArray(value)) return `an array of ${value.length}`;
+  if (isPlainObject(value)) return 'a map';
+  const json = JSON.stringify(value);
+  return json === undefined ? String(value) : json;
+}
+
+/**
+ * Deep-compare two values in this codec's encoded form — the dump's `collections[...].data` on one
+ * side, a fresh `encodeDocument()` of what the target actually holds on the other.
+ *
+ * This is what makes restore.js's verification gate a claim about *content* and not just about
+ * document identity. Both sides are already in the same encoded format (the verify crawl runs the
+ * same `crawlDocument`/`encodeDocument` as the dump), so this is a comparison and not extra I/O.
+ *
+ * Exactly one difference is tolerated, and it is the documented one: `{"@double": 12}` in the dump
+ * against `{"@int": "12"}` in the target. Every tolerated path is recorded in `out.retyped` so the
+ * caller can report it and cross-check it against `manifest.integralDoubleFields` — a tolerance
+ * that is invisible is indistinguishable from a gate that does not look.
+ *
+ * Paths are built exactly as `collectIntegralDoubles` builds them (`.key` for map keys, `[i]` for
+ * array indices, nothing appended for the `@map` wrapper), so a path in `out.retyped` is directly
+ * comparable to a `manifest.integralDoubleFields` entry.
+ *
+ * `out` is `{ diffs: string[], retyped: string[] }`.
+ */
+function compareEncoded(want, got, path, out) {
+  const wantTag = taggedKey(want);
+  const gotTag = taggedKey(got);
+
+  if (
+    wantTag === '@double' && gotTag === '@int'
+    && isIntegralDouble(want['@double']) && got['@int'] === String(want['@double'])
+  ) {
+    out.retyped.push(path);
+    return out;
+  }
+
+  if (wantTag || gotTag) {
+    if (wantTag !== gotTag) {
+      out.diffs.push(`${path}: dump has ${describeEncoded(want)}, target has ${describeEncoded(got)}`);
+      return out;
+    }
+    if (wantTag === '@map') return compareEncodedMap(want['@map'], got['@map'], path, out);
+    if (!plainEqual(want[wantTag], got[gotTag])) {
+      out.diffs.push(`${path}: dump has ${describeEncoded(want)}, target has ${describeEncoded(got)}`);
+    }
+    return out;
+  }
+
+  if (Array.isArray(want) || Array.isArray(got)) {
+    if (!Array.isArray(want) || !Array.isArray(got) || want.length !== got.length) {
+      out.diffs.push(`${path}: dump has ${describeEncoded(want)}, target has ${describeEncoded(got)}`);
+      return out;
+    }
+    for (let i = 0; i < want.length; i += 1) compareEncoded(want[i], got[i], `${path}[${i}]`, out);
+    return out;
+  }
+
+  if (isPlainObject(want) || isPlainObject(got)) {
+    if (!isPlainObject(want) || !isPlainObject(got)) {
+      out.diffs.push(`${path}: dump has ${describeEncoded(want)}, target has ${describeEncoded(got)}`);
+      return out;
+    }
+    return compareEncodedMap(want, got, path, out);
+  }
+
+  if (!Object.is(want, got)) {
+    out.diffs.push(`${path}: dump has ${describeEncoded(want)}, target has ${describeEncoded(got)}`);
+  }
+  return out;
+}
+
+/** compareEncoded over a field map — also the entrypoint for a whole document. */
+function compareEncodedMap(want, got, path, out) {
+  for (const k of Object.keys(want)) {
+    if (!Object.prototype.hasOwnProperty.call(got, k)) {
+      out.diffs.push(`${path}.${k}: in the dump (${describeEncoded(want[k])}), absent from the target`);
+      continue;
+    }
+    compareEncoded(want[k], got[k], `${path}.${k}`, out);
+  }
+  for (const k of Object.keys(got)) {
+    if (!Object.prototype.hasOwnProperty.call(want, k)) {
+      out.diffs.push(`${path}.${k}: in the target (${describeEncoded(got[k])}), absent from the dump`);
+    }
+  }
+  return out;
+}
+
+/** A fresh `{ diffs, retyped }` accumulator for compareEncoded. */
+const newComparison = () => ({ diffs: [], retyped: [] });
+
+module.exports.isIntegralDouble = isIntegralDouble;
+module.exports.compareEncoded = compareEncoded;
+module.exports.compareEncodedDocument = (want, got, docPath, out) =>
+  compareEncodedMap(want || {}, got || {}, docPath, out);
+module.exports.newComparison = newComparison;

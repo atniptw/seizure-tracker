@@ -7,9 +7,18 @@ const os = require('os');
 const path = require('path');
 const admin = require('firebase-admin');
 const { getFirestore } = require('firebase-admin/firestore');
-const { encodeDocument, decodeDocument, collectIntegralDoubles } = require('./codec');
+const {
+  encodeDocument, decodeDocument, collectIntegralDoubles, compareEncodedDocument, newComparison,
+} = require('./codec');
 
-/** migration.md §5: batched in chunks of 400 writes (Firestore's hard limit is 500). */
+/**
+ * migration.md §5: batched in chunks of 400 writes (Firestore's hard limit is 500).
+ *
+ * This bounds documents per commit, not request bytes — Firestore also caps a commit at ~10MiB.
+ * Fine for this dataset (a few thousand small documents; photo/video attachments are backlogged
+ * out of the release), but a future shape with large payloads could fail an oversized batch, and a
+ * failed batch in restore.js's delete pass leaves the interrupted state its README documents.
+ */
 const BATCH_SIZE = 400;
 /** getAll() takes a variadic ref list; keep each fan-out read modest. */
 const READ_CHUNK = 250;
@@ -18,6 +27,12 @@ const READ_CHUNK = 250;
  * Collections this migration knows about, per level. Anything found outside these lists is still
  * dumped, but reported loudly — the point of discovering subcollections with listCollections()
  * instead of hardcoding is that a collection added later is never silently missed.
+ *
+ * A level with no entry here is itself unknown, and `crawlCollection` reports every collection at
+ * such a level rather than staying silent. Otherwise the guarantee would only hold to the three
+ * depths listed below: `households/{h}/observations/{o}/attachments` — exactly the backlogged
+ * attachments feature — would be dumped and never mentioned, and `backup.js` is also the tool
+ * that takes the fresh dump against the new shape right before the §7 cleanup delete.
  */
 const KNOWN_COLLECTIONS = {
   root: ['households', 'codeIndex'],
@@ -121,6 +136,36 @@ function resolveCredentialSource({ emulatorHost, projectId }) {
   );
 }
 
+/**
+ * Called when `db.settings()` threw, i.e. settings were already applied on this instance by some
+ * earlier initializer. Confirm `useBigInt` actually took effect; the whole codec rests on it.
+ *
+ * `_settings` is the SDK's own record of the applied settings and is not public API, so an SDK
+ * upgrade could remove it. Losing the ability to check is reported, not treated as a failure —
+ * but a check that positively shows `useBigInt` off is fatal.
+ */
+function assertUseBigInt(db, settingsError) {
+  const applied = db._settings;
+  if (!applied || typeof applied !== 'object') {
+    console.log(
+      'WARNING: Firestore settings were already applied on this instance and this SDK version does',
+      'not expose them, so "useBigInt: true" could not be confirmed. If it is not in effect, every',
+      'integer is dumped as a double and an int64 past 2^53 is truncated. Original:',
+      settingsError.message
+    );
+    return;
+  }
+  if (applied.useBigInt !== true) {
+    throw new Error(
+      'Firestore settings were already applied on this instance WITHOUT useBigInt: true, and they ' +
+        'can only be applied once. The codec cannot tell an integer from a double without it, and ' +
+        'the SDK truncates any int64 past 2^53 before the codec sees it, so a dump taken now would ' +
+        'be silently lossy. Initialise Firestore through initFirestore() before anything else, or ' +
+        'apply { useBigInt: true } in whatever does initialise it.'
+    );
+  }
+}
+
 function initFirestore({ project }) {
   const emulatorHost = process.env.FIRESTORE_EMULATOR_HOST || null;
   const projectId =
@@ -136,11 +181,16 @@ function initFirestore({ project }) {
     );
   }
   const db = getFirestore();
-  // Integers must come back as BigInt or the codec cannot tell 12 from 12.0. Settings can only be
-  // applied once per instance; a second call throws, which is fine — it means it is already set.
+  // Integers must come back as BigInt or the codec cannot tell 12 from 12.0, and any int64 past
+  // 2^53 is truncated by the SDK before the codec ever sees it. Settings can only be applied once
+  // per instance, so a second call throws — but a throw only means "already applied", NOT
+  // "already applied with useBigInt". Assert rather than assume: swallowing this is how a
+  // losslessness tool loses precision silently.
   try {
     db.settings({ ignoreUndefinedProperties: false, useBigInt: true });
-  } catch (_) { /* already configured */ }
+  } catch (err) {
+    assertUseBigInt(db, err);
+  }
 
   return { db, emulatorHost, projectId: projectId || db.projectId, credential };
 }
@@ -170,7 +220,9 @@ async function crawlDocument(db, ref, report) {
 async function crawlCollection(db, colRef, report) {
   const level = levelOf(colRef.path);
   const known = KNOWN_COLLECTIONS[level];
-  if (known && !known.includes(colRef.id)) {
+  // No entry for this level means the level itself is unknown to the migration, which is at least
+  // as noteworthy as an unknown collection at a known level. Both are reported.
+  if (!known || !known.includes(colRef.id)) {
     report.unknownCollections.push(colRef.path);
   }
   report.seenCollections.add(templatePath(colRef.path));
@@ -276,6 +328,7 @@ module.exports = {
   EXPECTATIONS,
   KNOWN_COLLECTIONS,
   initFirestore,
+  assertUseBigInt,
   resolveCredentialSource,
   adcFilePath,
   crawlDocument,
@@ -289,4 +342,6 @@ module.exports = {
   templatePath,
   levelOf,
   decodeDocument,
+  compareEncodedDocument,
+  newComparison,
 };
