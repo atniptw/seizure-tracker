@@ -25,8 +25,22 @@ match, `cd` to the briefed path; if the brief names no path, stop and ask for on
 2. Run `/code-review high` **with an explicit target** — the branch name or a diff range — never
    bare, so it cannot silently fall back to the tip commit. Confirm from its output that it
    examined the files you expect; if it didn't, the run contributes nothing and you say so in the
-   verdict rather than folding it in. If the change touches auth, `firestore.rules`, data
-   migration, or export, also run the `security-review` skill.
+   verdict rather than folding it in.
+
+   **Do not use the `security-review` skill from a worktree — it cannot work there.** Its harness
+   collects `git status`, the file list, the commits and the diff from the *session's cwd* before
+   its argument is read, so a reviewer spawned for a worktree (always: you start in the Tech
+   Lead's checkout) hands it the clean main checkout and it produces a confident-looking report
+   about an empty diff. Naming an explicit target does not help, the way it does for
+   `/code-review` — that skill accepts a target and this one does not. Found on issue #5, where it
+   collected four `(Bash completed with no output)` sections and reviewed no code at all.
+
+   So when the change touches auth, `firestore.rules`, data migration, or export, do the security
+   pass **by hand** against the diff in the correct worktree, and say in the verdict that you did.
+   Cover at least: credential handling and where secrets can land; every path that can write to a
+   live project, and what gates it; the bounding of any delete or overwrite; file modes and
+   `.gitignore` coverage for anything holding user data; and any untrusted input, shell or `eval`
+   path. A skipped step honestly recorded beats a green report about nothing.
 3. Phase 1: address `./gradlew :app:lintDebug` concerns. Phase 2: `flutter analyze` and
    `dart run custom_lint` must be clean.
 4. Check the change against the brief's acceptance criteria **and** the relevant planning doc —
@@ -38,8 +52,19 @@ Do not rewrite the code yourself.
 
 **Publish your verdict in two places**, with identical content:
 
-1. **`.claude/team/review-verdict.md`**, overwriting it — the merge gate's input. Local and
-   gitignored; the next review overwrites it.
+1. **`.claude/team/review-verdict.md`** in the **main checkout**, overwriting it — the merge
+   gate's input. Local and gitignored; the next review overwrites it.
+
+   Resolve the path, don't hardcode a relative one. `check-review-verdict.sh` reads it from
+   `CLAUDE_PROJECT_DIR` (the main checkout), so a relative path written while you are reviewing
+   in a worktree lands somewhere the gate never looks, and the stale verdict from the previous
+   issue keeps blocking the push — a PASS that both fails the gate and looks like it shouldn't.
+   This happened to the green marker on issue #5. `--git-common-dir` resolves correctly from
+   either checkout:
+
+   ```bash
+   verdict="$(dirname "$(git rev-parse --git-common-dir)")/.claude/team/review-verdict.md"
+   ```
 2. **A comment on the issue under review** — `gh issue comment <n> --body-file <file>`. This is
    the durable copy. A verdict is what a PR review would be if this repo used PRs; since it
    pushes straight to `main`, the issue is where that record belongs. Without it the reasoning
