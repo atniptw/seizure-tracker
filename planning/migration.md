@@ -4,9 +4,11 @@
 and emulator-rehearsed (issue #5), the real-data rehearsal still pending; the live project
 inventoried read-only 2026-09-12 (§2), which moved several things in here from "assumed" to
 "known" · **Last updated:** 2026-09-12
-**Open, waiting on Tom** (each flagged in place): which member uids become admin (§2), what
-happens to the two test-junk households (§2), the reading of the "no prod data changes" hold
-(§4), and the disposition of the legacy household fields (§3).
+The three live member uids were resolved against Firebase Auth by provider on 2026-09-12, which
+settled the admin set (§2 inventory item 1).
+**Open, waiting on Tom** (each flagged in place): what happens to the two test-junk households
+(§2), the reading of the "no prod data changes" hold (§4), and the disposition of the legacy
+household fields (§3).
 **Companion docs:** `architecture.md` (target data model, §0 gap list), `product-spec.md`
 (features, entities, "what the next release contains"), `security-privacy.md` (roles, join
 mechanics, §8 rule changes), `flutter-migration.md` (the client rewrite this sequences before)
@@ -93,24 +95,54 @@ four **decisions**, flagged here and at the section each one lands in.
 Three households, three `codeIndex` entries (one each). A dash means the collection does not
 exist — `<HOUSEHOLD-2-ID>` has no subcollections at all.
 
-**(1) Three member uids in the live household, not two — open: which become admin.** The array
-and the subcollection agree exactly: three uids, three docs, no mismatch either way. Two are Tom
-and his wife; the third may be a stale test sign-in. `--admins` is passed explicitly and never
-inferred from the array (§4 area 1), so no script can settle this. **Needs Tom: the uid → admin /
-member assignment for all three.** Until then this plan says "every member doc must end up with a
-`role`, and the uids in `--admins` must come back `admin`" — never "both docs are admin".
+**(1) Three member uids in the live household, not two — resolved by provider, and the admin set
+is settled.** The array and the `members` subcollection agree exactly: three uids, three docs, no
+mismatch either way. Resolved against Firebase Auth 2026-09-12 (provider type only; the
+identities are deliberately not recorded in this doc):
+
+| uid | Provider | Auth account created | Last refresh |
+|---|---|---|---|
+| `<UID-GOOGLE-1>` | **Google** | <CREATED-AT> — 18s before the household doc | within the last week |
+| `<UID-ANON>` | **anonymous** — no provider record, no email, no display name | <CREATED-AT> — 35 min after the above | 2026-08-17 |
+| `<UID-GOOGLE-2>` | **Google** | <CREATED-AT> | within the last week |
+
+**`--admins` is the two Google uids** (`<UID-GOOGLE-1>`, `<UID-GOOGLE-2>`) — the two people, both
+with durable identities. **The anonymous member gets no role, deliberately.**
+
+`<UID-ANON>` is a **dead member**: anonymous uids do not survive a reinstall (`CLAUDE.md`, session/
+auth flow), so nobody can sign back into that account — it is unreachable, and it holds
+member-level write access to the live household today purely because its uid is still in the
+`members` array. Leaving it role-less is the intended disposition, not an oversight (see §4 window
+step 5, which says so at the point someone would be tempted to "fix" it).
+
+**What the timestamps suggest** (inference, not evidence — recorded because it is the reading the
+disposition above assumes): the anonymous uid was created 35 minutes after the household, and the
+second *Google* uid appeared on 2026-08-17 — the same day as the anonymous uid's last refresh.
+That is the shape of "the second person joined anonymously, later signed in with Google and
+re-joined", which would leave exactly one stranded anonymous member and two Google people. If
+instead the anonymous uid is a device still in daily use, the caveat below applies and the roles
+area should be re-decided before it runs.
+
+**One caveat on "unreachable":** it assumes no device still holds that anonymous session. If an
+old phone is still signed in as `<UID-ANON>`, it keeps member-level write access until either the uid
+is pulled from the `members` array or the admin-gated rules land (after which it can read and log
+but not manage). That is a device question, not an Auth one, and Auth can't answer it — the last
+refresh being 2026-08-17 is suggestive, not proof.
 
 **(2) Two of the three households are test junk — open: leave them, or delete them later.**
-`<HOUSEHOLD-2-ID>` and `<HOUSEHOLD-3-ID>` were both created 08-16 by one uid (`<UID-ANON-2>`) that appears in none
-of the live household's three. They hold 2 of the 3 `codeIndex` entries and real documents (3
+`<HOUSEHOLD-2-ID>` and `<HOUSEHOLD-3-ID>` were both created 08-16 by one uid
+(`<UID-ANON-2>`, **anonymous**, Auth account created <CREATED-AT>) that
+appears in none of the live household's three — a second, different anonymous identity from the
+live household's `<UID-ANON>`, and by the same reasoning also unreachable. They hold 2 of the 3 `codeIndex` entries and real documents (3
 seizures/health notes between them, 2 pets, 2 vets, 2 links). **Tom has decided nothing about
 them, and has since put a hold on all prod data changes until the new builds are deployed (§4) —
 so nothing in this plan deletes them.** The two options and what each costs:
 
 - **Left in place** (what the plan currently does): every area runs across all three households.
-  Issue #6 gives the junk households' single uid a `role`, #7 rewrites their four observations,
-  the meds area walks their two pets. Harmless, a little more to verify, and each junk household
-  keeps its `codeIndex` entry.
+  Issue #6 would give the junk households' single uid a `role` — and by the same logic applied to
+  `<UID-ANON>` it should instead be left role-less, since it is an unreachable anonymous identity.
+  #7 rewrites their four observations, the meds area walks their two pets. Harmless, a little more
+  to verify, and each junk household keeps its `codeIndex` entry.
 - **Deleted later** — a separate, gated decision, irreversible, needing its own fresh dump and
   its own verification. The operation then narrows to one household and
   `--household=<LIVE-HOUSEHOLD-ID>` becomes the default everywhere.
@@ -137,9 +169,9 @@ on the household docs. The integral-double retype in §5 is live-relevant, not t
 |---|---|---|---|
 | Logged events | `seizures/{id}` + `healthNotes/{id}` — two collections, two model classes | `observations/{id}` — one polymorphic collection, envelope + `details` map | `architecture.md §3`. Biggest change; needs a backfill. |
 | Event timestamp | `timestampMillis: Long` (epoch millis) | `occurredAt: Timestamp` + `createdAt` / `updatedAt: Timestamp` | **Observations only.** Firestore-native `Timestamp`; backfill converts. Non-observation `*Millis` fields (`Pet.birthDateMillis`, every doc's `createdAtMillis`, `MemberProfile.joinedAtMillis`) **stay `Long`** — see the note below the table. |
-| Roles | none — every member has full write access | `members/{uid}.role: "admin" \| "member"` | `security-privacy.md §4.1`. Backfill seeds **every uid passed in `--admins` as `admin`** (explicit, never inferred — the live array holds three uids and which of them are admin is open, §2 inventory item 1); any other array uid is created `role: "member"` and reported. |
+| Roles | none — every member has full write access | `members/{uid}.role: "admin" \| "member"` | `security-privacy.md §4.1`. Backfill seeds **every uid passed in `--admins` as `admin`** (explicit, never inferred). For the live household that is **the two Google uids**; the third member is an unreachable anonymous session and is deliberately left with **no** role (§2 inventory item 1). Any other array uid is created `role: "member"` and reported. |
 | Membership source of truth | `households/{id}.members: [uid]` array (also the access-check) | **unchanged** — same name, same client writes | The array on the household doc is the documented source of truth for *access*; `members/{uid}` is the source of truth for *metadata + role*. No rename (see §1). |
-| Member metadata | `members/{uid}` — `displayName`, `authMethod`, `joinedAtMillis` | + `role` | `authMethod` rename (`signInMethod`→`authMethod`) already done in code. `lastActiveAt` is **not** added here — it's post-v1 (`security-privacy.md §4.5`), since both *people* sign in with Google and stranding can't occur. Caveat: the live household has a third member uid whose sign-in method has not been checked (§2 inventory item 1). If it turns out to be an anonymous test sign-in, the stranded-identity case in `security-privacy.md §3.2/§4.5` stops being purely theoretical — one more reason identifying the three uids comes before the roles area. |
+| Member metadata | `members/{uid}` — `displayName`, `authMethod`, `joinedAtMillis` | + `role` | `authMethod` rename (`signInMethod`→`authMethod`) already done in code. `lastActiveAt` is **not** added here — it's post-v1 (`security-privacy.md §4.5`). Note that the *reason* given there no longer holds: a stranded anonymous identity is already in the live data (§2 inventory item 1). See the callout below the table. |
 | Join code | `households/{id}.code` field (every member reads it) | `households/{id}/private/config.joinCode` — admin-only read/write | `security-privacy.md §4.2`, §8 item 6. Removed from the household doc at cleanup. |
 | Code index | `codeIndex/{code}` = `{ householdId }` | unchanged — `{ householdId }` | `security-privacy.md §8` item 8. The join preview (which would add `householdName`) is deferred — `product-spec.md §4.0`. |
 | Medications | `Pet.medications: [Medication]` embedded array; discontinue = delete | `pets/{petId}/medications/{medId}` subcollection + `active`, `startDate`, `endDate` | `architecture.md §3`. Backfill lifts the array into docs. `startDate` backfills to **`null`** (the legacy data has no real start date — inferring one from the pet doc's creation date would fabricate clinical history). |
@@ -150,6 +182,26 @@ on the household docs. The integral-double retype in §5 is live-relevant, not t
 "v1" in `product-spec.md §4` but move to a later release — see `product-spec.md` "What the
 next release contains"): pet `diagnosisDate` field, history filters, the frequency-trend
 chart, the combined all-pets dashboard view, compare-to-similar-entries, Apple sign-in.
+
+> **Flag for the owner of `security-privacy.md` — a stated assumption is contradicted by the
+> live data.** §2.3's "a stranded anonymous identity **cannot arise in the next release** — it's
+> Google-only, and Google uids survive reinstall", and the §3.2/§4.5 framing of stranding as
+> design-for-later, are **false as of today**: the live household's three members are two Google
+> uids and one **anonymous** uid (`<UID-ANON>`, last refresh 2026-08-17) that nobody can sign back
+> into, and the two test households belong to a *second* unreachable anonymous uid. The stranding
+> case is not theoretical and not deferred — it has already happened twice, before the next
+> release ships. The mechanism is no mystery: the **shipped Kotlin app offers Anonymous sign-in
+> today** (`CLAUDE.md`, session/auth flow), so "the next release is Google-only" is a statement
+> about a release that hasn't shipped, while the *live data* was created by the one that did.
+> `§8 item 8`'s parenthetical — the non-anonymous-creator assertion "protects the
+> anonymous-stranding case, which the current household can't have" — is contradicted the same
+> way.
+>
+> This plan handles its own corner of it (the anonymous member is left role-less — §4 area 1, §4
+> window step 5). But §2.3's actor row, §3.2's "nothing here applies", §4.5, §8 item 8 and §10's
+> "only once anonymous sign-in is actually in use" all need revisiting by whoever owns that
+> document, and one of them may want a migration-era item of its own.
+> **Not edited here — `security-privacy.md` is not this plan's to change.**
 
 **Pet `archived` (new — in the next release).** Add `archived: bool` to every pet doc,
 backfilled to `false` (area 4). The client switches "remove pet" from a hard-delete to
@@ -326,10 +378,20 @@ Gated on the hard constraint above being resolved (Reading A leaves this order a
    permissive for now (§6).
 5. **Verify roles before anyone relies on them:** for **every** uid in the household's
    `members` array — three in the live household (§2 inventory item 1) — read back
-   `members/{uid}` and confirm the doc exists and carries a `role`, and that every uid passed in
-   `--admins` came back `role == "admin"`. If any doc is missing, or has no `role`, or has the
-   wrong one, fix it via the script *before* continuing — once the admin-gated rules are live, a
-   member with no `role` is locked out of every management action and cannot self-fix.
+   `members/{uid}` and confirm the doc exists, and that both uids passed in `--admins` (the two
+   Google uids) came back `role == "admin"`. If either admin doc is missing or has the wrong
+   role, fix it via the script *before* continuing: once the admin-gated rules are live, a member
+   with no `role` is locked out of every management action and cannot self-fix.
+
+   **For the anonymous member `<UID-ANON>`, that lockout is the desired outcome.** Expect exactly
+   one member doc with no `role` here, and leave it that way — do **not** "fix" it by granting a
+   role. It is an unreachable identity (§2 inventory item 1); a role on it would be management
+   access nobody can ever exercise or revoke from inside the app. The verification asserts it is
+   role-less *on purpose*, rather than asserting all three have roles.
+
+   *Caveat:* "unreachable" assumes no device still holds that anonymous session. If an old phone
+   is still signed in as `<UID-ANON>`, it keeps member-level write access until the uid is pulled
+   from the `members` array; the admin-gated rules narrow it to read-and-log but do not remove it.
 6. Install the new app build on both phones.
 7. **Re-run `--area=observations --commit`** after both phones are on the new build and have
    been opened online once. This is idempotent by design; it sweeps anything logged to the
@@ -351,14 +413,35 @@ rules, verify, update both phones). The per-area path still needs step 1 (flush)
 Later areas lean on earlier ones, so keep this sequence:
 
 **1. Roles.** Backfill: `--admins=<uid>[,<uid>...]` passed explicitly (never inferred from the
-array, and never assumed to be two — the live household has three member uids and which of them
-are admin is open, §2 inventory item 1). For each uid given: ensure a `members/{uid}` doc exists,
-set `role: "admin"`. Any *other* uid found in the `members` array gets a `members/{uid}` doc
-created with `role: "member"` and is **reported, not silently normalised** — a stray uid nobody
-can identify should not become an admin, and one of the live household's three may be exactly
-that. The same path covers an array uid with no profile doc at all, which is real live data
-(§2 inventory item 3). Nobody is demoted; demotion to `member` is a deliberate in-app action
-later.
+array, and never assumed to be two). For the live household the admin set is **settled: the two
+Google uids** `<UID-GOOGLE-1>` and `<UID-GOOGLE-2>` (§2 inventory item 1). For each uid given:
+ensure a `members/{uid}` doc exists, set `role: "admin"`.
+
+**The third member, `<UID-ANON>`, is anonymous and gets no role — deliberately.** Nobody can sign
+back into an anonymous uid after a reinstall, so it is a dead member that happens to still sit in
+the `members` array. Leaving it role-less is the disposition, not an omission: it keeps read and
+log access (rules only gate *management* on `role`) and loses nothing anyone can use.
+
+Any *other* uid found in the `members` array gets a `members/{uid}` doc created with
+`role: "member"` and is **reported, not silently normalised** — a stray uid nobody can identify
+should not become an admin. The same path covers an array uid with no profile doc at all, which is
+real live data (§2 inventory item 3).
+
+**The report must distinguish an anonymous uid from a federated one**, because the disposition
+differs: an anonymous uid in the array is presumptively dead weight (leave it role-less, consider
+removing it), a Google one is a real person who probably *should* have a role. One
+`admin.auth().getUser(uid)` per array uid answers it — `providerData` empty (and no email) means
+anonymous — which is cheap at this scale and makes the report actionable instead of a list of
+opaque strings. Apply the same reading to a `members/{uid}` profile doc whose uid is *not* in the
+array.
+
+Nobody is demoted; demotion to `member` is a deliberate in-app action later.
+
+**Not a step: removing the dead anonymous member.** Pulling `<UID-ANON>` from the `members` array and
+deleting its profile doc is **optional cleanup**, not a prerequisite for anything in this area —
+and it is a prod data change, so it is parked under §4's hold either way. The role-less state
+above is sufficient on its own. If it is ever done, it is the ordinary remove-member flow
+(`security-privacy.md §4.3`) and wants the same dump-first treatment as any other write.
 
 App: `MemberProfile` gains `role`. **`MemberRepository.upsertOwnProfile` must switch to
 `set(..., SetOptions.merge())` with `role` excluded from the client-written payload** —
@@ -509,7 +592,8 @@ explicit `--project`, since ADC carries no project id. Steps in the tool's READM
 - **`migrate.js`** *(not built — issues #6/#7/#9/#10)* — `--area=roles|joincode|observations|meds|all`,
   a dry run unless `--commit` (same convention as `restore.js`: no `--dry-run` flag),
   `--household=<id>` (three households exist — §2 inventory item 2), `--admins=<uid>[,<uid>...]`
-  (required for the roles area; a list of any length, not a pair).
+  (required for the roles area; a list of any length, not a pair — for the live household it is
+  the two Google uids, §2 inventory item 1).
 
 **Four things the plan above didn't anticipate, found while building the dump/restore half.**
 All four are now handled in the tooling; they're recorded here because §5's restore procedure
@@ -565,11 +649,17 @@ item 2):
 - Field-by-field check of **three specific known entries** — the oldest seizure, the most
   recent seizure, one health note — against the old app's rendering: duration, type, every
   symptom, `occurredAt`, notes.
-- **Every** uid in the household's `members` array has a `members/{uid}` doc, and **every** such
-  doc has a `role` field. Not "exactly two are admin": the assertion is that no member is left
-  role-less (that member would be locked out of every management action once the admin rules are
-  live, with no way to self-fix), and that the uids passed to `--admins` are the ones that came
-  back `admin`. The live household has three member uids (§2 inventory item 1).
+- **Every** uid in the household's `members` array has a `members/{uid}` doc, and **every uid
+  passed to `--admins`** came back `role == "admin"` — for the live household, the two Google
+  uids (§2 inventory item 1).
+- **Every other array uid is either given `role: "member"` or is a declared exception.** Not
+  "every member doc has a role": the live household's anonymous member `<UID-ANON>` is deliberately
+  left role-less (§4 area 1), so the gate takes the expected-role-less uids as input and asserts
+  *exactly* that set is role-less — an unexpected role-less member is a failure (it would be
+  locked out with no way to self-fix), and a role appearing on a declared-role-less uid is
+  **also** a failure (someone "fixed" a dead identity into management access).
+- Each reported uid is labelled **anonymous or federated** (`admin.auth().getUser`,
+  `providerData` empty ⇒ anonymous), since that is what decides its disposition (§4 area 1).
 - **No member doc is orphaned the other way either:** a `members/{uid}` doc whose uid is not in
   the array is reported (it grants nothing, but it means the roster and the access list disagree).
 
@@ -722,6 +812,13 @@ Settled for a two-person closed-track deployment:
 - **`members` → `memberIds` rename** — **dropped.** The array keeps its name (§1).
 - **Code rotation** — **not built here.** Deferred to a follow-up PR (§1, §4 area 2).
 - **Min-version gate** — not needed and not built. Two devices that update together.
+- **Admin set for the live household** — **the two Google uids** (`<UID-GOOGLE-1>`,
+  `<UID-GOOGLE-2>`), passed explicitly to `--admins`. The third member (`<UID-ANON>`) is an
+  **anonymous, unreachable identity and is left with no `role` on purpose** — a dead member that
+  keeps read/log access and gains no management access nobody could exercise (§2 inventory item 1,
+  §4 area 1). Removing it from the `members` array is optional cleanup, parked under §4's hold,
+  not a step in any area. Settled 2026-09-12 from Firebase Auth provider types; not inferred by
+  any script, now or later.
 - **Verification gate** — automated count assertions + a three-entry field check (§5), run at
   the window and again before the §7 cleanup delete. **Count-agnostic on roles** (every member
   doc has a `role`; the `--admins` uids came back `admin`) and either run per household across
@@ -738,11 +835,13 @@ Settled for a two-person closed-track deployment:
 ### Open — waiting on Tom (nothing runs against prod until these are answered)
 
 Recorded here so they are not re-litigated in an issue thread. Each is written up where it
-matters; this is the index.
+matters; this is the index. (The admin set is **no longer** on this list — it was settled
+2026-09-12; see the decision above. Separately, and not a Tom decision: the
+`security-privacy.md` stranded-anonymous assumption that the live data contradicts needs routing
+to that doc's owner — the callout in §3.)
 
 | Open item | Where | Recommendation |
 |---|---|---|
-| Which of the live household's **three member uids** become `admin` (one may be a stale test sign-in) | §2 inventory item 1, §4 area 1 | None — only Tom can identify the uids. The plan is count-agnostic until he does. Issue #6 inherits this. |
-| What happens to the **two test-junk households** (08-16, one foreign uid, 2 of 3 `codeIndex` entries, 4 real observations, 2 pets) | §2 inventory item 2 | No deletion planned or implied. Left in place, every area and the gate cover three households; if Tom later decides to delete, that is its own gated, dumped, irreversible step. |
+| What happens to the **two test-junk households** (08-16, one foreign **anonymous** uid, 2 of 3 `codeIndex` entries, 4 real observations, 2 pets) | §2 inventory item 2 | No deletion planned or implied. Left in place, every area and the gate cover three households, and their anonymous owner is left role-less for the same reason `<UID-ANON>` is; if Tom later decides to delete, that is its own gated, dumped, irreversible step. |
 | The reading of **"hold off on changing any data in prod until we get new versions of the app deployed"** | §4 hard constraint | Reading A (no ad-hoc prod surgery outside the window; window order unchanged). Reading B would force throwaway dual-read code into the largest area. |
 | Disposition of the **legacy household fields** (`dogName`, `dogBreed`, `dogWeightKg`, `vetName`, household `medications`) | §3 "Legacy household fields", §7 step 4 | Delete in the §7 cleanup after a rehearsal diff proves they duplicate the subcollections; anything unique goes to Tom for a manual merge first. Data minimization — `security-privacy.md §2.1`/§7, issue #17. |
