@@ -36,4 +36,14 @@ const HEALTH_DATA_WARNING = [
   'location, and delete it once the migration.md §7 cleanup has verified.',
 ].join('\n');
 
-module.exports = { parseArgs, list, log, warn, countTable, HEALTH_DATA_WARNING };
+/** One-line description of the credential initFirestore resolved, for the target banner. */
+function describeCredential(credential) {
+  if (!credential) return 'unknown';
+  if (credential.kind === 'emulator') return 'none (emulator)';
+  if (credential.kind === 'adc') return `gcloud ADC (${credential.path})`;
+  return `service-account key (${credential.path})`;
+}
+
+module.exports = {
+  parseArgs, list, log, warn, countTable, describeCredential, HEALTH_DATA_WARNING,
+};

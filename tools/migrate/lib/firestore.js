@@ -2,6 +2,9 @@
 
 // Admin SDK plumbing shared by backup.js and restore.js.
 
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const admin = require('firebase-admin');
 const { getFirestore } = require('firebase-admin/firestore');
 const { encodeDocument, decodeDocument, collectIntegralDoubles } = require('./codec');
@@ -55,21 +58,75 @@ function levelOf(collectionPath) {
   return templatePath(parts.slice(0, -1).join('/'));
 }
 
+/**
+ * Where gcloud keeps Application Default Credentials — the same well-known path
+ * `admin.credential.applicationDefault()` falls back to when GOOGLE_APPLICATION_CREDENTIALS is
+ * unset. `CLOUDSDK_CONFIG` overrides the directory (gcloud honours it too), which is also how the
+ * tests exercise this without touching the operator's real gcloud config.
+ */
+function adcFilePath() {
+  const dir = process.env.CLOUDSDK_CONFIG || path.join(os.homedir(), '.config', 'gcloud');
+  return path.join(dir, 'application_default_credentials.json');
+}
+
+/**
+ * Which credential the Admin SDK is going to use — decided up front so a missing one fails here,
+ * with a message naming every option, rather than inside the SDK on the first RPC.
+ *
+ * Two accepted sources against a live project, and `applicationDefault()` already handles both:
+ *
+ * - `GOOGLE_APPLICATION_CREDENTIALS` — a downloaded service-account key. Long-lived, and
+ *   `security-privacy.md §2.3` lists whoever holds it as an actor with the reach of the whole
+ *   database, so it is the fallback, not the default.
+ * - gcloud ADC (`gcloud auth application-default login`) — user credentials at the well-known
+ *   path, revocable with one command and with no key file to leak. Preferred for the rehearsal.
+ *
+ * The ADC path additionally requires an explicit project id: unlike a key file, ADC carries no
+ * `project_id`, so without one the SDK fails later and confusingly.
+ *
+ * Returns `{ kind: 'emulator' | 'key-file' | 'adc', path? }`.
+ */
+function resolveCredentialSource({ emulatorHost, projectId }) {
+  if (emulatorHost) {
+    if (!projectId) {
+      throw new Error('Running against the emulator needs an explicit --project (e.g. --project demo-seizuretracker-rules-test).');
+    }
+    return { kind: 'emulator' };
+  }
+
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    return { kind: 'key-file', path: process.env.GOOGLE_APPLICATION_CREDENTIALS };
+  }
+
+  const adc = adcFilePath();
+  if (fs.existsSync(adc)) {
+    if (!projectId) {
+      throw new Error(
+        `Found Application Default Credentials (${adc}) but no project id.\n` +
+          'ADC carries no project id (a service-account key does), so the Admin SDK would fail\n' +
+          'later and unhelpfully. Pass --project=<id> or set GOOGLE_CLOUD_PROJECT.'
+      );
+    }
+    return { kind: 'adc', path: adc };
+  }
+
+  throw new Error(
+    'No credentials: FIRESTORE_EMULATOR_HOST is unset, GOOGLE_APPLICATION_CREDENTIALS is unset,\n' +
+      `and there is no Application Default Credentials file at ${adc}.\n` +
+      'Pick one (see tools/migrate/README.md):\n' +
+      '  emulator   FIRESTORE_EMULATOR_HOST=127.0.0.1:8080  (no credentials at all)\n' +
+      '  gcloud ADC gcloud auth application-default login    (preferred for the live project —\n' +
+      '             nothing long-lived on disk; then pass --project=<id>)\n' +
+      '  key file   GOOGLE_APPLICATION_CREDENTIALS=/abs/path/service-account.json'
+  );
+}
+
 function initFirestore({ project }) {
   const emulatorHost = process.env.FIRESTORE_EMULATOR_HOST || null;
   const projectId =
     project || process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || undefined;
 
-  if (!emulatorHost && !process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    throw new Error(
-      'Neither FIRESTORE_EMULATOR_HOST nor GOOGLE_APPLICATION_CREDENTIALS is set.\n' +
-        'Point at the emulator with FIRESTORE_EMULATOR_HOST=localhost:8080, or at the real project\n' +
-        'with a service-account key in GOOGLE_APPLICATION_CREDENTIALS (see tools/migrate/README.md).'
-    );
-  }
-  if (emulatorHost && !projectId) {
-    throw new Error('Running against the emulator needs an explicit --project (e.g. --project demo-seizuretracker-rules-test).');
-  }
+  const credential = resolveCredentialSource({ emulatorHost, projectId });
 
   if (!admin.apps.length) {
     admin.initializeApp(
@@ -85,7 +142,7 @@ function initFirestore({ project }) {
     db.settings({ ignoreUndefinedProperties: false, useBigInt: true });
   } catch (_) { /* already configured */ }
 
-  return { db, emulatorHost, projectId: projectId || db.projectId };
+  return { db, emulatorHost, projectId: projectId || db.projectId, credential };
 }
 
 /**
@@ -219,6 +276,8 @@ module.exports = {
   EXPECTATIONS,
   KNOWN_COLLECTIONS,
   initFirestore,
+  resolveCredentialSource,
+  adcFilePath,
   crawlDocument,
   crawlCollection,
   newReport,

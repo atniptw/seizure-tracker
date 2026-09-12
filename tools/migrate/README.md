@@ -7,7 +7,7 @@ that project exists and a restore from it has been rehearsed.**
 | Script | What it does | Destructive? |
 |---|---|---|
 | `backup.js` | Recursive Admin SDK read of `households/{id}` + every subcollection + `codeIndex/*` → a timestamped JSON dump + a per-collection count manifest | No. Read-only; it has no write path at all. |
-| `restore.js` | From a dump: delete the named collections, re-write every document, re-read and compare counts **and document-id sets** against the manifest, exit non-zero on any mismatch | **Yes.** `--dry-run` is the default; `--commit` is required, and `--allow-prod` on top of that for a live project. |
+| `restore.js` | From a dump: delete the named collections, re-write every document, re-read and compare counts **and document-id sets** against the manifest, exit non-zero on any mismatch | **Yes, but only with `--commit`.** Without `--commit` it plans the work and writes nothing — that is the default, and there is no `--dry-run` flag to type. A live project additionally needs `--allow-prod`. |
 
 `migrate.js` (the `--area=roles|joincode|observations|meds` backfill) is **not here yet** — it is
 issues #6 / #7 / #9 / #10. This package delivers the dump/restore half independently.
@@ -56,11 +56,37 @@ node backup.js --project=demo-seizuretracker-rules-test
 The `demo-` prefix makes the emulator refuse to reach a real backend, so this cannot touch real
 data even if the project id is wrong.
 
-### Against the live project — a service-account key
+### Against the live project — gcloud ADC (preferred)
 
 The Admin SDK bypasses Security Rules, which is the point (a migration has to write `role` fields
-no client is allowed to write). It authenticates with a service-account key, via
-`GOOGLE_APPLICATION_CREDENTIALS`.
+no client is allowed to write). It will authenticate with **either** of two credentials, and the
+scripts accept both: your own gcloud **Application Default Credentials**, or a downloaded
+**service-account key**. Prefer ADC. A key file is long-lived, and `security-privacy.md §2.3` lists
+whoever holds it as an actor with the same reach as the whole database; ADC is a user credential
+with nothing persistent to leak beyond a revocable token, and it goes away with one command.
+
+```bash
+gcloud auth application-default login       # once — writes the well-known ADC file (see below)
+node backup.js --project=<prod-project-id>  # --project is REQUIRED on this path
+```
+
+- **`--project` (or `GOOGLE_CLOUD_PROJECT`) is required with ADC.** Unlike a key file, ADC carries
+  no project id, so without one the SDK would fail late and confusingly. The scripts refuse to
+  start instead.
+- The signed-in account needs Firestore access on the project (the project owner does;
+  `roles/datastore.user` is enough).
+- The well-known file is `~/.config/gcloud/application_default_credentials.json`, or
+  `$CLOUDSDK_CONFIG/application_default_credentials.json` if you set `CLOUDSDK_CONFIG`. Both
+  scripts print which credential they resolved on the `Creds:` line of their banner — read it.
+- If the SDK complains about a quota project:
+  `gcloud auth application-default set-quota-project <prod-project-id>`.
+
+**Revoke when the migration is done:** `gcloud auth application-default revoke` (see Cleanup
+below). That is the whole cleanup on this path — there is no key to chase.
+
+### Against the live project — a service-account key (alternative)
+
+Use this only if ADC is not an option (a CI runner, or an account without project access).
 
 1. Firebase console → the SeizureTracker project → **Project settings → Service accounts**.
 2. **Generate new private key** → downloads a JSON key for the
@@ -76,6 +102,9 @@ GOOGLE_APPLICATION_CREDENTIALS=~/.config/seizuretracker/prod-service-account.jso
   node backup.js --project=<prod-project-id>
 ```
 
+`GOOGLE_APPLICATION_CREDENTIALS` wins over ADC when both are present (that is the Admin SDK's own
+precedence, and the scripts report which one they used).
+
 Least privilege, if you want it: instead of the default Firebase Admin SDK account (which is
 broad), create a dedicated service account in the Google Cloud console with only
 `roles/datastore.user` and download its key. Both scripts need nothing else.
@@ -83,9 +112,21 @@ broad), create a dedicated service account in the Google Cloud console with only
 **Delete the key when the migration is done.** Revoke it in the console (Service accounts → the
 key → delete) rather than only removing the file.
 
+### Either way
+
 Make sure `FIRESTORE_EMULATOR_HOST` is **unset** when you mean to hit the live project — if it is
 set, the Admin SDK silently talks to the emulator and you get an empty dump that looks successful.
-`backup.js` prints its target on the first line; read it.
+Conversely, when it *is* set the scripts ignore whatever credentials are lying around and talk only
+to the emulator, so ambient ADC cannot leak into an emulator run. Both scripts print their target
+and their credential on the first two lines; read them.
+
+### Cleanup when the migration is done
+
+```bash
+gcloud auth application-default revoke          # the ADC path: removes the local ADC file
+                                                # (key-file path: delete the key in the console)
+rm tools/migrate/dumps/*.json                   # once migration.md §7 has verified
+```
 
 ## `backup.js`
 
@@ -167,9 +208,10 @@ zero, `NaN` and the infinities all round-trip exactly. See the comment on
 ```bash
 cd tools/migrate
 unset FIRESTORE_EMULATOR_HOST
-export GOOGLE_APPLICATION_CREDENTIALS=~/.config/seizuretracker/prod-service-account.json
+# Credentials: `gcloud auth application-default login` (preferred), or export
+# GOOGLE_APPLICATION_CREDENTIALS=~/.config/seizuretracker/prod-service-account.json
 
-# 1. Dry run first. Read the plan and the counts.
+# 1. Dry run first (no --commit = nothing is written). Read the plan and the counts.
 node restore.js dumps/<the-window-dump>.json --project=<prod-project-id> --allow-prod
 
 # 2. Commit. Must end with "OK: every restored collection matches the dump manifest".
@@ -186,8 +228,9 @@ dump. At two users that manual re-entry is the accepted fallback (`migration.md 
 
 ## The real-data rehearsal (`migration.md §5` "Testing the tooling")
 
-Required before the window, and it needs the prod service-account key. Run it top to bottom; every
-command is here so nothing has to be reconstructed under pressure.
+Required before the window, and it needs credentials for the prod project — gcloud ADC is enough
+(preferred; see Credentials above). Run it top to bottom; every command is here so nothing has to be
+reconstructed under pressure.
 
 ```bash
 cd /Users/tom/Claude/Projects/SeizureTracker/tools/migrate
@@ -198,18 +241,26 @@ EMU=demo-seizuretracker-rules-test
 
 # ---- 1. Dump prod. Read-only: backup.js has no write path. ----
 unset FIRESTORE_EMULATOR_HOST
-export GOOGLE_APPLICATION_CREDENTIALS=~/.config/seizuretracker/prod-service-account.json
+gcloud auth application-default login       # preferred; or export GOOGLE_APPLICATION_CREDENTIALS
 node backup.js --project=$PROD --label=rehearsal --expect=legacy --require-expected
-# -> confirm the first line says the LIVE project, not an emulator
+# -> confirm the banner says the LIVE project, not an emulator, and names the credential you meant
 # -> note the manifest counts; keep the filename:
 PROD_DUMP=$(ls -t dumps/dump-$PROD-*-rehearsal.json | head -1)
+# -> scope: the project holds THREE households (migration.md §2 — the live one plus two 08-16
+#    test households) and three codeIndex entries. The default dumps all of them, which is what
+#    the rehearsal wants. --household=<id> narrows it, but --require-expected is evaluated per
+#    collection *template* across the whole dump, so a dump narrowed to a household that has no
+#    subcollections at all will fail it — correctly.
 
 # ---- 2. Sanity-check the counts against the app before trusting them ----
 # Open the app: the number of seizures + health notes, the pet list, the member list. If the
 # manifest says fewer entries than the app shows, stop — the dump is not complete.
 
 # ---- 3. Load the dump into the emulator (a different shell for the emulator) ----
-unset GOOGLE_APPLICATION_CREDENTIALS        # nothing past here should hold prod credentials
+unset GOOGLE_APPLICATION_CREDENTIALS        # if you used the key-file path. ADC is ambient and
+                                            # cannot be unset per-shell — that is fine: with
+                                            # FIRESTORE_EMULATOR_HOST set the scripts talk only to
+                                            # the emulator, and a live target needs --allow-prod.
 # shell B:
 #   /Users/tom/.nvm/versions/node/v24.13.0/bin/firebase emulators:start --project $EMU --only firestore
 export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
@@ -231,7 +282,8 @@ diff <(manifest "$PROD_DUMP") <(manifest "$EMU_DUMP")
 
 # ---- 6. Clean up ----
 rm -rf /tmp/rehearsal
-# Keep $PROD_DUMP until the migration.md §7 cleanup verifies, then delete it and revoke the key.
+gcloud auth application-default revoke      # or delete the service-account key in the console
+# Keep $PROD_DUMP until the migration.md §7 cleanup verifies, then delete it.
 ```
 
 Once the emulator holds real-shaped data, it is also the input for the backfill rehearsal in
@@ -276,6 +328,10 @@ after the existing `firestore-tests` ones:
 
 - The `firebase` CLI is not on the default node's `PATH`. It is at
   `/Users/tom/.nvm/versions/node/v24.13.0/bin/firebase`.
+- `gcloud` is authenticated on this machine; the ADC file
+  (`~/.config/gcloud/application_default_credentials.json`) is created by
+  `gcloud auth application-default login` and is a separate thing from `gcloud auth login`. Until
+  it exists, a live-project run stops with an error naming all three credential options.
 - The emulator ports come from the repo-root `firebase.json`: Firestore 8080, Auth 9099.
 - `firebase emulators:exec` sets `FIRESTORE_EMULATOR_HOST=127.0.0.1:8080` itself, so commands run
   inside it need no export.

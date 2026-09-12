@@ -15,7 +15,9 @@ const path = require('path');
 const {
   initFirestore, crawlDocument, crawlCollection, newReport, checkExpectations, findIntegralDoubles,
 } = require('./lib/firestore');
-const { parseArgs, list, log, warn, countTable, HEALTH_DATA_WARNING } = require('./lib/cli');
+const {
+  parseArgs, list, log, warn, countTable, describeCredential, HEALTH_DATA_WARNING,
+} = require('./lib/cli');
 
 const FORMAT = 'seizuretracker-firestore-dump/1';
 const USAGE = `
@@ -31,19 +33,22 @@ Usage: node backup.js --project=<id> [options]
   --no-codeindex           Skip codeIndex/* (not recommended; the join code lives there).
 
 Emulator:  FIRESTORE_EMULATOR_HOST=localhost:8080 node backup.js --project=demo-seizuretracker-rules-test
-Prod:      GOOGLE_APPLICATION_CREDENTIALS=/abs/path/key.json node backup.js --project=<real-project>
+Prod:      gcloud auth application-default login  (preferred), then
+             node backup.js --project=<real-project>
+           or GOOGLE_APPLICATION_CREDENTIALS=/abs/path/key.json node backup.js --project=<real-project>
 `;
 
 async function main(argv) {
   const { flags } = parseArgs(argv);
   if (flags.help || flags.h) { log(USAGE); return 0; }
 
-  const { db, emulatorHost, projectId } = initFirestore({ project: flags.project });
+  const { db, emulatorHost, projectId, credential } = initFirestore({ project: flags.project });
   const expect = flags.expect === undefined ? 'legacy' : String(flags.expect);
   const outDir = flags.out ? String(flags.out) : path.join(__dirname, 'dumps');
   const wanted = list(flags.household);
 
   log(`Target: project=${projectId} ${emulatorHost ? `emulator=${emulatorHost}` : 'LIVE PROJECT (no emulator host set)'}`);
+  log(`Creds:  ${describeCredential(credential)}`);
 
   const report = newReport();
   const collections = { households: {}, codeIndex: {} };

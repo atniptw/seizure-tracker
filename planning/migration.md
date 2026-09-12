@@ -1,8 +1,12 @@
 # Migration Plan — shipped Firestore shape → target backend
 
 **Status:** draft for discussion; **Phase 1 in progress** — `backup.js` / `restore.js` built
-and emulator-rehearsed (issue #5), the real-data rehearsal still pending · **Last updated:**
-2026-09-12
+and emulator-rehearsed (issue #5), the real-data rehearsal still pending; the live project
+inventoried read-only 2026-09-12 (§2), which moved several things in here from "assumed" to
+"known" · **Last updated:** 2026-09-12
+**Open, waiting on Tom** (each flagged in place): which member uids become admin (§2), what
+happens to the two test-junk households (§2), the reading of the "no prod data changes" hold
+(§4), and the disposition of the legacy household fields (§3).
 **Companion docs:** `architecture.md` (target data model, §0 gap list), `product-spec.md`
 (features, entities, "what the next release contains"), `security-privacy.md` (roles, join
 mechanics, §8 rule changes), `flutter-migration.md` (the client rewrite this sequences before)
@@ -36,21 +40,24 @@ backend that already looks like its target.
 After this migration the target docs still describe more than the app does; the remaining gap
 is entirely *client features* and *scale optimizations*, not *data shape*.
 
-## 2. The user base is two people on a closed track
+## 2. The user base is two people on a closed track — but three member uids
 
 This is the fact that shapes the entire approach:
 
-- **Two users, two devices** — Tom and his wife, one household.
+- **Two people, two devices** — Tom and his wife, one household. **The live household's
+  `members` array nevertheless holds three uids**, with three matching docs in its `members`
+  subcollection (see the inventory below). Everything about roles and verification in this plan
+  is written per-uid and count-agnostic as a result — never "both members".
 - **Closed Firebase distribution.** The app ships only to the two of them, as testers on a
   closed track. There is no public listing; no other install is even possible. There is no
   such thing here as a "client in the wild," a straggler stuck on an old version, or an
   unknown write shape reaching Firestore.
-- Both devices update on request, in person.
+- The devices update on request, in person.
 
 So the migration is **one maintenance window**, not a phased rollout with dual-read/dual-write
 compatibility windows, a min-version gate, or a multi-week bake. There is nothing to stay
-backward-compatible *with* once both phones are on the new build, because those two phones are
-the only clients that exist.
+backward-compatible *with* once the phones are on the new build, because those phones are the
+only clients that exist.
 
 The risks that do remain are all about **losing real seizure history**, and there are three,
 each with a matching safeguard in §4:
@@ -71,15 +78,68 @@ the new build writes its first entry, that entry exists only in the new shape �
 old app" from that point on silently drops everything logged since. The lossless-rollback
 window ends at the first write from the new build (§4); after that the path is fix-forward.
 
+### The live project, inventoried read-only (2026-09-12)
+
+Taken with REST count aggregations and `__name__`-only projections — no document bodies read, no
+writes. Where the plan contradicted this, the plan has been corrected in place; what is left is
+four **decisions**, flagged here and at the section each one lands in.
+
+| Household | Created / updated | seizures | healthNotes | pets | vets | petVetLinks | `members` subcoll | `members` array |
+|---|---|---|---|---|---|---|---|---|
+| `<LIVE-HOUSEHOLD-ID>` — **the live household** | 08-02 / 08-17 | 2 | 2 | 1 | 1 | 1 | 3 | 3 |
+| `<HOUSEHOLD-2-ID>` | 08-16 / never updated | — | — | — | — | — | 0 | 1 |
+| `<HOUSEHOLD-3-ID>` | 08-16 | 1 | 1 | 2 | 1 | 1 | 1 | 1 |
+
+Three households, three `codeIndex` entries (one each). A dash means the collection does not
+exist — `<HOUSEHOLD-2-ID>` has no subcollections at all.
+
+**(1) Three member uids in the live household, not two — open: which become admin.** The array
+and the subcollection agree exactly: three uids, three docs, no mismatch either way. Two are Tom
+and his wife; the third may be a stale test sign-in. `--admins` is passed explicitly and never
+inferred from the array (§4 area 1), so no script can settle this. **Needs Tom: the uid → admin /
+member assignment for all three.** Until then this plan says "every member doc must end up with a
+`role`, and the uids in `--admins` must come back `admin`" — never "both docs are admin".
+
+**(2) Two of the three households are test junk — open: leave them, or delete them later.**
+`<HOUSEHOLD-2-ID>` and `<HOUSEHOLD-3-ID>` were both created 08-16 by one uid (`<UID-ANON-2>`) that appears in none
+of the live household's three. They hold 2 of the 3 `codeIndex` entries and real documents (3
+seizures/health notes between them, 2 pets, 2 vets, 2 links). **Tom has decided nothing about
+them, and has since put a hold on all prod data changes until the new builds are deployed (§4) —
+so nothing in this plan deletes them.** The two options and what each costs:
+
+- **Left in place** (what the plan currently does): every area runs across all three households.
+  Issue #6 gives the junk households' single uid a `role`, #7 rewrites their four observations,
+  the meds area walks their two pets. Harmless, a little more to verify, and each junk household
+  keeps its `codeIndex` entry.
+- **Deleted later** — a separate, gated decision, irreversible, needing its own fresh dump and
+  its own verification. The operation then narrows to one household and
+  `--household=<LIVE-HOUSEHOLD-ID>` becomes the default everywhere.
+
+Either way: **the verification gate has to handle three households, or be explicitly scoped to
+one with `--household`.** `count(observations) == count(seizures) + count(healthNotes)` is only
+true per household, and the junk households' documents would otherwise land in the same totals.
+
+**(3) The "array uid with no profile doc" cruft case is real, not hypothetical.** `<HOUSEHOLD-2-ID>` has
+one uid in its `members` array and zero docs in its `members` subcollection — exactly the shape
+the emulator fixture invents (§5 "Testing the tooling"). It is live data; do not let anyone trim
+it from the fixture as synthetic. The roles area's "create the doc with `role: member` and report
+it" path (§4 area 1) fires on it for real.
+
+**(4) Every household doc still carries abandoned legacy fields** that this plan mapped nowhere —
+see §3 "Legacy household fields".
+
+**(5) `weightKg` really is a Firestore double in prod** — on the live pet, and as `dogWeightKg`
+on the household docs. The integral-double retype in §5 is live-relevant, not theoretical.
+
 ## 3. What changes
 
 | Area | Today (shipped) | After this migration | Notes |
 |---|---|---|---|
 | Logged events | `seizures/{id}` + `healthNotes/{id}` — two collections, two model classes | `observations/{id}` — one polymorphic collection, envelope + `details` map | `architecture.md §3`. Biggest change; needs a backfill. |
 | Event timestamp | `timestampMillis: Long` (epoch millis) | `occurredAt: Timestamp` + `createdAt` / `updatedAt: Timestamp` | **Observations only.** Firestore-native `Timestamp`; backfill converts. Non-observation `*Millis` fields (`Pet.birthDateMillis`, every doc's `createdAtMillis`, `MemberProfile.joinedAtMillis`) **stay `Long`** — see the note below the table. |
-| Roles | none — every member has full write access | `members/{uid}.role: "admin" \| "member"` | `security-privacy.md §4.1`. Backfill seeds **the two known uids as `admin`** (passed explicitly, not inferred); any other array uid is created `role: "member"` and reported. |
+| Roles | none — every member has full write access | `members/{uid}.role: "admin" \| "member"` | `security-privacy.md §4.1`. Backfill seeds **every uid passed in `--admins` as `admin`** (explicit, never inferred — the live array holds three uids and which of them are admin is open, §2 inventory item 1); any other array uid is created `role: "member"` and reported. |
 | Membership source of truth | `households/{id}.members: [uid]` array (also the access-check) | **unchanged** — same name, same client writes | The array on the household doc is the documented source of truth for *access*; `members/{uid}` is the source of truth for *metadata + role*. No rename (see §1). |
-| Member metadata | `members/{uid}` — `displayName`, `authMethod`, `joinedAtMillis` | + `role` | `authMethod` rename (`signInMethod`→`authMethod`) already done in code. `lastActiveAt` is **not** added here — it's post-v1 (`security-privacy.md §4.5`), since both members are Google and stranding can't occur. |
+| Member metadata | `members/{uid}` — `displayName`, `authMethod`, `joinedAtMillis` | + `role` | `authMethod` rename (`signInMethod`→`authMethod`) already done in code. `lastActiveAt` is **not** added here — it's post-v1 (`security-privacy.md §4.5`), since both *people* sign in with Google and stranding can't occur. Caveat: the live household has a third member uid whose sign-in method has not been checked (§2 inventory item 1). If it turns out to be an anonymous test sign-in, the stranded-identity case in `security-privacy.md §3.2/§4.5` stops being purely theoretical — one more reason identifying the three uids comes before the roles area. |
 | Join code | `households/{id}.code` field (every member reads it) | `households/{id}/private/config.joinCode` — admin-only read/write | `security-privacy.md §4.2`, §8 item 6. Removed from the household doc at cleanup. |
 | Code index | `codeIndex/{code}` = `{ householdId }` | unchanged — `{ householdId }` | `security-privacy.md §8` item 8. The join preview (which would add `householdName`) is deferred — `product-spec.md §4.0`. |
 | Medications | `Pet.medications: [Medication]` embedded array; discontinue = delete | `pets/{petId}/medications/{medId}` subcollection + `active`, `startDate`, `endDate` | `architecture.md §3`. Backfill lifts the array into docs. `startDate` backfills to **`null`** (the legacy data has no real start date — inferring one from the pet doc's creation date would fabricate clinical history). |
@@ -96,6 +156,40 @@ backfilled to `false` (area 4). The client switches "remove pet" from a hard-del
 setting `archived: true` (a true delete stays available only for a pet with zero
 observations). This closes the shipped-app quirk where deleting a pet orphaned its
 observations. No rules change — a pet write is already admin-only (`security-privacy.md §8`).
+
+### Legacy household fields — the pre-`pets` shape, still populated
+
+The table above covers every *collection* and misses a set of *fields*. Every household doc in
+the live project (all three) still carries the pre-multi-pet shape: `dogName`, `dogBreed`,
+`dogWeightKg` (a genuine Firestore double), `vetName`, and a `medications` array of one entry —
+sitting alongside the `pets` / `vets` subcollections that replaced them. The live pet doc has its
+own `medications` array and its own `weightKg`.
+
+Nothing reads them. The `Household` data class is `id, code, name, members, createdAtMillis`, and
+no file under `app/src/main` mentions `dogName`, `dogBreed`, `dogWeightKg` or `diagnosisDate`. So
+this is **orphaned duplicate health data that the app can neither display nor delete** — and the
+only place anyone would notice it is a `backup.js` dump, which preserves it faithfully (right for
+a backup, and the reason this surfaced at all).
+
+- **Mapping decision: nothing maps.** No backfill area reads these fields. Everything the app
+  actually uses already lives in `pets` / `vets` / the medications array. They are a **cleanup**
+  item (§7), not a migration item.
+- **Recommended disposition — delete them in the §7 cleanup, after a one-time diff.** Not in the
+  window (which should stay as close to read-mostly as it can), and not before the diff: during
+  the pre-window rehearsal, compare each household's legacy fields against its subcollections —
+  `dogWeightKg` vs the pet's `weightKg`, `vetName` vs the `vets` docs, the household `medications`
+  entry vs the pet's array. If every value is a duplicate, §7 deletes the fields along with the
+  rest of the legacy shape. If anything is **unique** (an older weight, a vet that never made it
+  into `vets`, a medication the pet doc doesn't have), it goes to Tom as a one-time manual merge
+  into the pet/vet docs *before* the delete — that is real clinical history and no script should
+  guess at it.
+- **Why delete rather than leave.** `security-privacy.md §2.1` treats the household health record
+  as the asset worth protecting, and §7 sets retention as "until a member deletes it". A second,
+  invisible copy of a pet's weight, medication and vet that no member can see or remove is exactly
+  what data minimization is for, and it is the same shape of problem as issue #17 (in-app
+  account/data deletion): a deletion path that leaves undeletable copies behind is not one.
+- **Still a product question, not a migration one.** **Needs Tom:** confirm delete-after-diff (the
+  recommendation), or say the fields stay.
 
 ### `observations` envelope, and how each legacy doc maps
 
@@ -143,6 +237,41 @@ backfill writes.
 
 ## 4. Approach: one window, one script, one rules deploy
 
+### Hard constraint (2026-09-12): no prod data changes until the new builds are deployed
+
+Tom, verbatim: *"Hold off on changing any data in prod until we get new versions of the app
+deployed."*
+
+Read literally, this inverts the window below: step 3 runs the backfill and step 6 installs the
+new build, deliberately in that order, because the new app reads a shape that has to exist before
+it first opens. "No data changes until the new build is deployed" and "the new build needs the
+new shape already there" cannot both hold, so the instruction needs one of two readings before
+any area runs against prod:
+
+- **Reading A — "no ad-hoc prod surgery now, outside the real migration window."** The hold is on
+  poking at prod *between sessions*: no exploratory writes, no partial backfills, no one-off
+  console fixes. The window itself, once it is scheduled and both people are present, runs in the
+  order below. *Implication:* the plan is unchanged; what changes is that every prod write waits
+  for the window, and read-only work (counts, a `backup.js` dump, the §2 inventory) is the only
+  prod access until then.
+- **Reading B — "reorder the window: deploy the new builds first, backfill after."**
+  *Implication:* the new build would launch against the legacy shape, so it must ship a
+  dual-read compatibility layer — read `observations` if present else `seizures`/`healthNotes`,
+  read the medications subcollection else the embedded array, tolerate a missing `role` — which
+  is precisely the dual-read/dual-write window §2 rules out at two users. The new rules also
+  could not be deployed until after the backfill, or the new build is locked out of the paths it
+  needs. That compatibility code would be the largest app diff in the plan, written to be
+  deleted.
+
+**Recommendation: Reading A.** It is satisfiable, costs nothing, and is what every safeguard here
+is already built around. Reading B buys nothing that the 45-minute supervised window doesn't
+already give, and pays for it in throwaway compatibility code inside the riskiest area.
+
+**Needs Tom's confirmation — this is his call, not the team's, and the window order below is not
+rewritten on anyone else's reading of it.** Until he confirms: **no writes to prod of any kind** —
+that includes issues #6/#7/#9/#10's backfills and any manual console edit. Read-only access is not
+a data change and remains allowed; §4's first safeguard in fact *requires* a dump.
+
 ### Safeguards
 
 - **A local JSON dump before touching anything.** `tools/migrate/backup.js` — Admin SDK,
@@ -157,7 +286,8 @@ backfill writes.
   pressure. **Done** (issue #5): the emulator round-trip is an automated test, and the
   procedure is written out command-by-command in `tools/migrate/README.md`. The rehearsal
   against a dump of the *real* data still has to happen before the window.
-- **The backfill script is idempotent and `--dry-run` by default.** Node + Firebase Admin
+- **The backfill script is idempotent, and a dry run unless `--commit`** (the same convention
+  `restore.js` already ships — there is no `--dry-run` flag to type). Node + Firebase Admin
   SDK (bypasses Security Rules), run locally by Tom against the prod project. Deterministic
   doc ids everywhere possible (observations reuse legacy ids; `private/config` is a fixed
   path; medication docs keyed by a content hash — see §5), `merge: true` writes, "create if
@@ -175,7 +305,9 @@ backfill writes.
   old rules; *after* cutover, fix forward (or run `restore.js` and accept losing everything
   logged since the dump).
 
-### The window (~45 min, both phones, both people present)
+### The window (~45 min, both people present, every member device on hand)
+
+Gated on the hard constraint above being resolved (Reading A leaves this order as written).
 
 0. **Pre-window (done earlier, not in the window):** take a dump, run the rehearsal (§4
    safeguards), confirm both apps are ready to install.
@@ -183,16 +315,21 @@ backfill writes.
    sitting in a local write queue that could flush *after* the backfill has passed that
    collection. Then stop using both apps.
 2. Take a fresh dump (`backup.js`) — this is the one the rollback uses.
-3. Run the backfill: `--dry-run` first, eyeball the per-area diff, then `--commit`. One
-   entrypoint, areas in order: roles → join-code → observations → medications. (Export-log is
-   a new empty collection — nothing to backfill.)
+3. Run the backfill: with no `--commit` first (that *is* the dry run), eyeball the per-area
+   diff, then re-run with `--commit`. One entrypoint, areas in order: roles → join-code →
+   observations → medications. (Export-log is a new empty collection — nothing to backfill.)
+   **Decide the household scope first:** the project holds three households, two of them test
+   junk (§2 inventory item 2). Either run across all three and verify all three, or pass
+   `--household=<LIVE-HOUSEHOLD-ID>` and say so in the verification.
 4. Deploy the new `firestore.rules` — a superset: every new path added and gated per
    `security-privacy.md §8`, legacy `seizures` / `healthNotes` / household-`code` access left
    permissive for now (§6).
-5. **Verify roles before anyone relies on them:** read back both `members/{uid}` docs and
-   confirm `role == "admin"` on each. If either is missing or wrong, fix it via the script
-   *before* continuing — once the admin-gated rules are live, a member with no `role` is
-   locked out and can't self-fix.
+5. **Verify roles before anyone relies on them:** for **every** uid in the household's
+   `members` array — three in the live household (§2 inventory item 1) — read back
+   `members/{uid}` and confirm the doc exists and carries a `role`, and that every uid passed in
+   `--admins` came back `role == "admin"`. If any doc is missing, or has no `role`, or has the
+   wrong one, fix it via the script *before* continuing — once the admin-gated rules are live, a
+   member with no `role` is locked out of every management action and cannot self-fix.
 6. Install the new app build on both phones.
 7. **Re-run `--area=observations --commit`** after both phones are on the new build and have
    been opened online once. This is idempotent by design; it sweeps anything logged to the
@@ -213,11 +350,15 @@ rules, verify, update both phones). The per-area path still needs step 1 (flush)
 
 Later areas lean on earlier ones, so keep this sequence:
 
-**1. Roles.** Backfill: `--admins=<uid1>,<uid2>` passed explicitly (never inferred from the
-array). For each: ensure a `members/{uid}` doc exists, set `role: "admin"`. Any *other* uid
-found in the `members` array gets a `members/{uid}` doc created with `role: "member"` and is
-**reported, not silently normalised** — a stray uid nobody can identify should not become an
-admin. Nobody is demoted; demotion to `member` is a deliberate in-app action later.
+**1. Roles.** Backfill: `--admins=<uid>[,<uid>...]` passed explicitly (never inferred from the
+array, and never assumed to be two — the live household has three member uids and which of them
+are admin is open, §2 inventory item 1). For each uid given: ensure a `members/{uid}` doc exists,
+set `role: "admin"`. Any *other* uid found in the `members` array gets a `members/{uid}` doc
+created with `role: "member"` and is **reported, not silently normalised** — a stray uid nobody
+can identify should not become an admin, and one of the live household's three may be exactly
+that. The same path covers an array uid with no profile doc at all, which is real live data
+(§2 inventory item 3). Nobody is demoted; demotion to `member` is a deliberate in-app action
+later.
 
 App: `MemberProfile` gains `role`. **`MemberRepository.upsertOwnProfile` must switch to
 `set(..., SetOptions.merge())` with `role` excluded from the client-written payload** —
@@ -347,8 +488,13 @@ becomes admin-gated (`product-spec.md §4`). Rules: `exportLog/{id}` — `create
 
 ## 5. The tooling (`tools/migrate/`)
 
-Three Node entrypoints, all Admin SDK (a service-account key for the prod project,
-`GOOGLE_APPLICATION_CREDENTIALS`, gitignored — steps in the tool's README):
+Three Node entrypoints, all Admin SDK — which bypasses Security Rules, the point of using it.
+Credentials for the prod project are **either** gcloud Application Default Credentials
+(`gcloud auth application-default login` — preferred: nothing long-lived on disk, one-command
+revoke) **or** a service-account key in `GOOGLE_APPLICATION_CREDENTIALS` (gitignored; a
+long-lived asset `security-privacy.md §2.3` treats as equivalent to the whole database). Both
+scripts accept either and print which one they resolved; the ADC path additionally requires an
+explicit `--project`, since ADC carries no project id. Steps in the tool's README:
 
 - **`backup.js`** *(built — issue #5)* — recursive read of `households/{id}` + every
   subcollection + `codeIndex/*` → timestamped local JSON + a per-collection count manifest.
@@ -358,11 +504,12 @@ Three Node entrypoints, all Admin SDK (a service-account key for the prod projec
 - **`restore.js`** *(built — issue #5)* — from a dump: delete the named collections, re-write
   every doc, then re-read and compare **counts and document-id sets** against the manifest
   (counts alone would pass a doc written under the wrong id), exiting non-zero on any mismatch.
-  `--dry-run` by default; `--commit` to write, and `--allow-prod` on top of that against a live
-  project. See "Restore procedure" below.
+  A dry run unless `--commit` is passed (there is no `--dry-run` flag to type); `--allow-prod`
+  is required on top of `--commit` against a live project. See "Restore procedure" below.
 - **`migrate.js`** *(not built — issues #6/#7/#9/#10)* — `--area=roles|joincode|observations|meds|all`,
-  `--dry-run` (default) vs `--commit`, `--household=<id>`, `--admins=<uid>,<uid>` (required for
-  the roles area).
+  a dry run unless `--commit` (same convention as `restore.js`: no `--dry-run` flag),
+  `--household=<id>` (three households exist — §2 inventory item 2), `--admins=<uid>[,<uid>...]`
+  (required for the roles area; a list of any length, not a pair).
 
 **Four things the plan above didn't anticipate, found while building the dump/restore half.**
 All four are now handled in the tooling; they're recorded here because §5's restore procedure
@@ -372,15 +519,19 @@ and §7's count assertion lean on them:
    any JS number passing `Number.isSafeInteger()` as a Firestore *integer*, with no way to force
    a double — so a stored `12.0` comes back as `12`. Both scripts report every affected field by
    path (`manifest.integralDoubleFields`) rather than letting it surface during verification. The
-   only double in the shipped shape is `Pet.weightKg`; the Android SDK widens an integer back to
-   a `Double?` on read and Firestore's numeric comparisons span both types, so the impact is a
-   recorded type change, not data loss. Non-integral doubles, `-0`, `NaN` and the infinities
+   only double in the shipped shape is `Pet.weightKg` — **and prod really does store it as a
+   `doubleValue`**, on the live pet and (as `dogWeightKg`) on all three household docs (§2
+   inventory item 5), so this is a fact about the real restore, not a hypothetical. The Android
+   SDK widens an integer back to a `Double?` on read and Firestore's numeric comparisons span
+   both types, so the impact is a recorded type change, not data loss. Non-integral doubles, `-0`, `NaN` and the infinities
    round-trip exactly. The same limit will apply to anything `migrate.js` writes.
 2. **`codeIndex` is a top-level collection, not a household subcollection.** A restore scoped to
    one household must not clear another household's join code, so `--codeindex=scoped` (the
    default) only touches codes that are in the dump or point at a household in it, and a dump
-   narrowed with `--household` narrows its `codeIndex` to match. Moot at one household today;
-   not moot the first time this runs against a second one.
+   narrowed with `--household` narrows its `codeIndex` to match. **Not moot:** the project holds
+   three households and three `codeIndex` entries, two of each belonging to the test-junk
+   households (§2 inventory item 2), so a single-household restore would otherwise clear codes
+   that point somewhere else.
 3. **"Assert the expected collections are present" can't be a hard failure by default.** An
    empty Firestore collection does not exist, so a household that has never logged a health note
    genuinely has no `healthNotes` collection and that is indistinguishable from a crawl that
@@ -406,13 +557,21 @@ and §7's count assertion lean on them:
 
 ### Verification gate (§4 window step 8, and again before §7 cleanup)
 
-Not "the screens render." Concretely:
+Not "the screens render." Concretely, and **per household — the project holds three, so the gate
+either covers all three or is explicitly scoped with `--household` and says so** (§2 inventory
+item 2):
 - `count(observations) == count(seizures) + count(healthNotes)`, per household.
 - `count(pets/{petId}/medications) == length(pet.medications array)`, per pet.
 - Field-by-field check of **three specific known entries** — the oldest seizure, the most
   recent seizure, one health note — against the old app's rendering: duration, type, every
   symptom, `occurredAt`, notes.
-- Both `members/{uid}` docs have `role == "admin"`.
+- **Every** uid in the household's `members` array has a `members/{uid}` doc, and **every** such
+  doc has a `role` field. Not "exactly two are admin": the assertion is that no member is left
+  role-less (that member would be locked out of every management action once the admin rules are
+  live, with no way to self-fix), and that the uids passed to `--admins` are the ones that came
+  back `admin`. The live household has three member uids (§2 inventory item 1).
+- **No member doc is orphaned the other way either:** a `members/{uid}` doc whose uid is not in
+  the array is reported (it grants nothing, but it means the roster and the access list disagree).
 
 `migrate.js --area=verify` runs the automated checks and **exits non-zero on any mismatch**;
 the §7 cleanup delete refuses to run unless it passes.
@@ -435,10 +594,12 @@ of entries is the accepted fallback.
   into the local Firebase emulator → run all areas → `--area=verify` → re-run for
   idempotency → run `restore.js` against the dump and confirm it round-trips. The dump/restore
   half of this is a written transcript in `tools/migrate/README.md` ("The real-data rehearsal")
-  — run it as-is; it needs the prod service-account key and nothing else. The backfill half
+  — run it as-is; it needs prod credentials (gcloud ADC is enough) and nothing else. The backfill half
   waits on `migrate.js`.
 - Emulator fixture: also keep a hand-seeded "legacy shape" household (old collections, `code`
-  field, no roles, embedded meds, a member-array uid with no profile doc, a doc with
+  field, no roles, embedded meds, **a member-array uid with no profile doc — which is real live
+  data, not a synthetic edge case: `<HOUSEHOLD-2-ID>` has one array uid and zero member docs
+  (§2 inventory item 3), so nobody should later trim this case as invented**, a doc with
   `timestampMillis == 0`) for the fast unit-style assertions. **Built** — it lives in
   `tools/migrate/__tests__/helpers.js` and is reused by the dump/restore round-trip test; add
   the backfill assertions to the same fixture rather than seeding a second one. It also carries
@@ -462,8 +623,11 @@ The window's single `firestore.rules` deploy is a **superset**: new paths added 
 `security-privacy.md §8`, legacy `seizures` / `healthNotes` / household-`code` access still
 permitted. The §7 cleanup deploy removes the legacy blocks once the new shape is confirmed.
 The legacy paths stay open in between purely so "redeploy the previous app" remains a working
-rollback (for an admin — after area 1 the previous app's writes to `pets`/`vets`/embedded
-meds require admin, and both current members are admin, so this holds).
+rollback (for an admin — after area 1 the previous app's writes to `pets`/`vets`/embedded meds
+require admin). **That holds only for the uids that actually end up `admin`.** With three member
+uids in the live household and the assignment still open (§2 inventory item 1), a member left as
+`member` cannot write pets/vets/embedded meds from the old app at all; if the rollback story has
+to work for a particular device, that device's uid has to be in `--admins`.
 
 One thing the superset is **not**: embedded medications don't get a separate carve-out.
 They're fields on the pet doc, and area 1 makes pet-doc writes admin-only — there's no
@@ -484,12 +648,20 @@ clean," not a calendar date.
    months stale and has none of the post-migration data.
 2. **`migrate.js --area=verify`** must pass (see §5) — the cleanup delete refuses to run
    otherwise.
-3. **Cleanup pass** (`--dry-run` by default, like every other area): delete
+3. **Cleanup pass** (a dry run unless `--commit`, like every other area): delete
    `households/{id}.code`, delete the embedded `medications` array from pet docs, delete all
    `seizures/*` and `healthNotes/*` docs.
-4. **Rules:** remove the `seizures`, `healthNotes`, household-`code`, and embedded-medication
-   blocks. (No `members` → `memberIds` rename — that was dropped, see §1.)
-5. **App / tests:** delete the dead model classes, repository methods, compatibility
+4. **Legacy household fields** (§3 "Legacy household fields"): delete `dogName`, `dogBreed`,
+   `dogWeightKg`, `vetName` and the household-level `medications` array from every household doc.
+   **Gated on** the pre-window diff having shown they hold nothing the `pets`/`vets`
+   subcollections don't — or on Tom having merged whatever was unique into the pet/vet docs
+   first. This is the data-minimization half of the cleanup (`security-privacy.md §2.1`/§7,
+   issue #17): until it runs, the record holds a copy of a pet's weight, medication and vet that
+   no member can see or delete. Recommended, still **needs Tom's confirmation** (§3).
+5. **Rules:** remove the `seizures`, `healthNotes`, household-`code`, and embedded-medication
+   blocks. (No `members` → `memberIds` rename — that was dropped, see §1.) The legacy household
+   *fields* need no rule change — they are fields on a doc whose write rule is already admin-only.
+6. **App / tests:** delete the dead model classes, repository methods, compatibility
    branches, and legacy fixtures.
 
 Until this PR lands, a rollback *to before cutover* is "`restore.js` + previous rules +
@@ -524,7 +696,16 @@ Settled for a two-person closed-track deployment:
 - **Dump fidelity** — the dump is typed JSON (integers as strings, `Timestamp`/`GeoPoint`/
   `Bytes`/`DocumentReference`/`NaN`/`-0` tagged), so it round-trips every Firestore type
   **except** a double whose value is a safe integer, which the Node Admin SDK cannot write
-  back as a double. Reported per field, accepted rather than worked around (§5).
+  back as a double. Reported per field, accepted rather than worked around (§5). **This is live,
+  not hypothetical:** prod stores `weightKg` as a real `doubleValue` on the pet and
+  `dogWeightKg` on every household doc (§2 inventory item 5), so a restore will retype them and
+  the manifest will name them.
+- **Migration-tooling credentials** — gcloud ADC (`gcloud auth application-default login`) is
+  the preferred credential for the live project, with a service-account key as the fallback.
+  Same reach either way (the Admin SDK bypasses rules), but ADC leaves no long-lived key file on
+  the laptop and revokes with one command, and `security-privacy.md §2.3` lists a key holder as
+  an actor equivalent to the whole database. Both scripts accept either and report which they
+  used; ADC additionally requires an explicit `--project`.
 - **Rollback** — lossless only before the first write from the new build; fix-forward after
   (§5). No automated reverse backfill; manual re-entry of a handful of post-cutover entries
   is the accepted fallback at this scale.
@@ -542,7 +723,9 @@ Settled for a two-person closed-track deployment:
 - **Code rotation** — **not built here.** Deferred to a follow-up PR (§1, §4 area 2).
 - **Min-version gate** — not needed and not built. Two devices that update together.
 - **Verification gate** — automated count assertions + a three-entry field check (§5), run at
-  the window and again before the §7 cleanup delete.
+  the window and again before the §7 cleanup delete. **Count-agnostic on roles** (every member
+  doc has a `role`; the `--admins` uids came back `admin`) and either run per household across
+  all three or explicitly scoped with `--household`.
 - **`flagForVet` / "mention at next vet visit"** — dropped from the product entirely. No
   field on the envelope, no backfill.
 - **Health note `notes`** — dropped as a standalone field; the form is now one text box
@@ -551,3 +734,15 @@ Settled for a two-person closed-track deployment:
 - **`summary` for backfilled seizures** — `"<duration> · <type>"` (e.g. `"4 min ·
   Generalized (grand mal)"`), `"seizure"` when both are empty. Recomputed on every write
   (§3); the Flutter client may drop the field and format at render time instead.
+
+### Open — waiting on Tom (nothing runs against prod until these are answered)
+
+Recorded here so they are not re-litigated in an issue thread. Each is written up where it
+matters; this is the index.
+
+| Open item | Where | Recommendation |
+|---|---|---|
+| Which of the live household's **three member uids** become `admin` (one may be a stale test sign-in) | §2 inventory item 1, §4 area 1 | None — only Tom can identify the uids. The plan is count-agnostic until he does. Issue #6 inherits this. |
+| What happens to the **two test-junk households** (08-16, one foreign uid, 2 of 3 `codeIndex` entries, 4 real observations, 2 pets) | §2 inventory item 2 | No deletion planned or implied. Left in place, every area and the gate cover three households; if Tom later decides to delete, that is its own gated, dumped, irreversible step. |
+| The reading of **"hold off on changing any data in prod until we get new versions of the app deployed"** | §4 hard constraint | Reading A (no ad-hoc prod surgery outside the window; window order unchanged). Reading B would force throwaway dual-read code into the largest area. |
+| Disposition of the **legacy household fields** (`dogName`, `dogBreed`, `dogWeightKg`, `vetName`, household `medications`) | §3 "Legacy household fields", §7 step 4 | Delete in the §7 cleanup after a rehearsal diff proves they duplicate the subcollections; anything unique goes to Tom for a manual merge first. Data minimization — `security-privacy.md §2.1`/§7, issue #17. |

@@ -7,15 +7,18 @@
 // and compare the per-collection counts (and the document-id sets) against the dump's manifest.
 // Reports every mismatch and exits non-zero if there is one.
 //
-// Destructive. --dry-run is the default; --commit is required to touch anything, and a run against
-// a live project additionally needs --allow-prod.
+// Destructive, but only with --commit: with no --commit it plans the work, prints it and writes
+// nothing (there is no --dry-run flag — a dry run is what you get by default). A run against a live
+// project additionally needs --allow-prod.
 
 const fs = require('fs');
 const {
   initFirestore, crawlDocument, crawlCollection, newReport, flattenForWrite,
   collectRefsDeepestFirst, commitInChunks, decodeDocument, BATCH_SIZE,
 } = require('./lib/firestore');
-const { parseArgs, list, log, warn, countTable, HEALTH_DATA_WARNING } = require('./lib/cli');
+const {
+  parseArgs, list, log, warn, countTable, describeCredential, HEALTH_DATA_WARNING,
+} = require('./lib/cli');
 const { FORMAT } = require('./backup');
 
 const USAGE = `
@@ -68,7 +71,7 @@ async function main(argv) {
   }
   const commit = flags.commit === true;
 
-  const { db, emulatorHost, projectId } = initFirestore({ project: flags.project });
+  const { db, emulatorHost, projectId, credential } = initFirestore({ project: flags.project });
 
   if (!emulatorHost && !flags['allow-prod']) {
     throw new Error(
@@ -87,6 +90,7 @@ async function main(argv) {
   log(`        taken ${dump.createdAt} from project=${dump.source.projectId}` +
       `${dump.source.emulatorHost ? ` (emulator ${dump.source.emulatorHost})` : ''}`);
   log(`Target: project=${projectId} ${emulatorHost ? `emulator=${emulatorHost}` : 'LIVE PROJECT'}`);
+  log(`Creds:  ${describeCredential(credential)}`);
   log(`Mode:   ${commit ? 'COMMIT (destructive)' : 'dry run (nothing will be written)'}`);
   log(`Scope:  households=[${dump.scope.households.join(', ')}] codeIndex=${codeIndexMode}` +
       `${only.length ? ` only=[${only.join(', ')}]` : ''}`);
