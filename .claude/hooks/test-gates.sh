@@ -53,6 +53,16 @@ echo doc > "$TMP/wt-docs/planning/notes.md"
 git -C "$TMP/wt-docs" add -A
 git -C "$TMP/wt-docs" commit -qm "docs change"
 
+# Worktree with a TOOLS change (tools/migrate/) — the migration backup/restore
+# scripts get pointed at two real users' only copy of their health history, so the
+# gate must cover them exactly as it covers app/. It did not until issue #5: the
+# path list predated the directory, so the whole of tools/ pushed unguarded.
+git -C "$MAIN" worktree add -q -b topic-tools "$TMP/wt-tools" main
+mkdir -p "$TMP/wt-tools/tools/migrate"
+echo tool > "$TMP/wt-tools/tools/migrate/backup.js"
+git -C "$TMP/wt-tools" add -A
+git -C "$TMP/wt-tools" commit -qm "tooling change"
+
 VERDICT="$MAIN/.claude/team/review-verdict.md"
 MARKER="$MAIN/.claude/team/last-green"
 
@@ -83,8 +93,10 @@ check "worktree, code diff, no verdict"        "$VERDICT_HOOK" "$TMP/wt-code" "g
 check "worktree, docs-only diff, no verdict"   "$VERDICT_HOOK" "$TMP/wt-docs" "git push origin HEAD:main" allow
 check "not a push at all"                      "$VERDICT_HOOK" "$TMP/wt-code" "git status"                allow
 check "push --all with code diff, no verdict"  "$VERDICT_HOOK" "$TMP/wt-code" "git push --all origin"     deny
+check "worktree, tools/ diff, no verdict"      "$VERDICT_HOOK" "$TMP/wt-tools" "git push origin HEAD:main" deny
 fresh_markers
 check "worktree, code diff, fresh PASS"        "$VERDICT_HOOK" "$TMP/wt-code" "git push origin HEAD:main" allow
+check "worktree, tools/ diff, fresh PASS"      "$VERDICT_HOOK" "$TMP/wt-tools" "git push origin HEAD:main" allow
 printf 'Status: CHANGES\n' > "$VERDICT"
 check "worktree, code diff, verdict=CHANGES"   "$VERDICT_HOOK" "$TMP/wt-code" "git push origin HEAD:main" deny
 fresh_markers
@@ -107,6 +119,7 @@ echo "check-green-marker.sh"
 clear_markers
 check "worktree, code diff, no marker"         "$GREEN_HOOK" "$TMP/wt-code" "git push origin HEAD:main" deny
 check "worktree, docs-only diff, no marker"    "$GREEN_HOOK" "$TMP/wt-docs" "git push origin HEAD:main" allow
+check "worktree, tools/ diff, no marker"       "$GREEN_HOOK" "$TMP/wt-tools" "git push origin HEAD:main" deny
 fresh_markers
 check "worktree, code diff, fresh marker"      "$GREEN_HOOK" "$TMP/wt-code" "git push origin HEAD:main" allow
 touch -t 200001010000 "$MARKER"

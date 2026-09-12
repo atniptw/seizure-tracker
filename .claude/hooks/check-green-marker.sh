@@ -44,7 +44,7 @@ esac
 range="origin/main..HEAD"
 git -C "$repo" rev-parse origin/main >/dev/null 2>&1 || range="HEAD"
 changed=$(git -C "$repo" diff --name-only $range 2>/dev/null || true)
-code=$(printf '%s\n' "$changed" | grep -E '^(app/|lib/|test/|integration_test/|firestore\.rules$|firestore-tests/)' || true)
+code=$(printf '%s\n' "$changed" | grep -E '^(app/|lib/|test/|integration_test/|tools/|firestore\.rules$|firestore-tests/)' || true)
 [ -n "$code" ] || exit 0
 
 marker=".claude/team/last-green"

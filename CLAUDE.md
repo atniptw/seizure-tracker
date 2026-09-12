@@ -193,7 +193,7 @@ drifted from it before. Four things are non-negotiable and belong in front of yo
    `disallowedTools: Agent` on all six). Every handoff is an artifact the Tech Lead passes along —
    the issue, the worktree, `review-verdict.md`, `last-green`, and the local `.claude/team/log/`.
 2. **The merge gate is a hard block.** A push updating `main` that touches `app/`, `lib/`,
-   `test/`, `firestore.rules` or `firestore-tests/` is refused unless `review-verdict.md` says
+   `test/`, `tools/`, `firestore.rules` or `firestore-tests/` is refused unless `review-verdict.md` says
    `Status: PASS` *and* `last-green` exists, both newer than the commits being pushed. Docs/config
    pushes are exempt. Both files are gitignored and human-writable — the deliberate override when
    Tom reviewed or ran the tests himself. Verify the hooks with `.claude/hooks/test-gates.sh`
