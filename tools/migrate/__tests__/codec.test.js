@@ -127,6 +127,32 @@ describe('compareEncoded', () => {
     expect(diff('12', { '@int': '12' }).diffs).toHaveLength(1);
   });
 
+  test('catches a divergence beyond the first array element, at the right index', () => {
+    // A comparator that only walked index 0 (or only compared lengths) would pass both of these:
+    // matching length, matching first element, and — for the array of maps — a matching key at
+    // the diverging index too. The real clinical data this is standing in for is exactly this
+    // shape: `medications`, a seizure's symptom list — repeated elements past the first.
+    expect(diff([1, 2, 3], [1, 999, 3]).diffs).toEqual(['f[1]: dump has 2, target has 999']);
+
+    // Array of maps: the second element's field diverges, first element identical.
+    expect(diff(
+      [{ name: 'a', doseMg: 5 }, { name: 'b', doseMg: 10 }],
+      [{ name: 'a', doseMg: 5 }, { name: 'b', doseMg: 999 }]
+    ).diffs).toEqual(['f[1].doseMg: dump has 10, target has 999']);
+  });
+
+  test('catches a divergence nested two map levels deep, at the full path', () => {
+    // The "dropped nested map key" case above only reaches one level of nesting (f.m.b). A
+    // comparator whose recursion silently stopped comparing past the first nested map — plausible
+    // shape for a regression, since `compareEncoded` recurses into `compareEncodedMap` on every
+    // plain-object value — would report this pair as equal. This is also the real shape a
+    // medication's structure takes if it ever grows a nested field (e.g. a `schedule` map).
+    expect(diff({ m: { n: { a: 1, b: 2 } } }, { m: { n: { a: 1, b: 999 } } }).diffs)
+      .toEqual(['f.m.n.b: dump has 2, target has 999']);
+    expect(diff({ m: { n: { a: 1, b: 2 } } }, { m: { n: { a: 1 } } }).diffs)
+      .toEqual(['f.m.n.b: in the dump (2), absent from the target']);
+  });
+
   test('compares inside tag payloads, and through the @map wrapper', () => {
     expect(diff({ '@time': { s: 1, n: 5 } }, { '@time': { s: 1, n: 6 } }).diffs).toHaveLength(1);
     expect(diff({ '@geo': { lat: 1, lng: 2 } }, { '@geo': { lat: 1, lng: 2 } }).diffs).toEqual([]);

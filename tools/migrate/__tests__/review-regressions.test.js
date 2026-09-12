@@ -246,9 +246,12 @@ describe('the verification gate compares content', () => {
         return { ...data, description: 'CORRUPTED' };
       }
       if (path === 'households/h-legacy/pets/p-dog') {
-        // Drop one key from inside the embedded medications array — a decode that lost a nested
-        // map, which leaves the array length and every other field untouched.
-        const meds = data.medications.map((m, i) => (i === 0 ? { name: m.name, dose: m.dose } : m));
+        // Drop one key from inside the embedded medications array, at index 1 rather than 0 —
+        // a comparator whose array walk only reached the first element (a real regression shape:
+        // `compareEncoded`'s array branch is a loop with an index) would pass this silently, and
+        // `medications` is exactly the kind of repeated clinical data this gate exists to protect.
+        // Leaves the array length and every other field untouched.
+        const meds = data.medications.map((m, i) => (i === 1 ? { name: m.name, dose: m.dose } : m));
         return { ...data, medications: meds };
       }
       return undefined;
@@ -265,7 +268,7 @@ describe('the verification gate compares content', () => {
       'households/h-legacy/healthNotes/n-both.description: dump has ' +
       '"Off food since this morning", target has "CORRUPTED"'
     );
-    expect(res.out).toContain('households/h-legacy/pets/p-dog.medications[0].frequency');
+    expect(res.out).toContain('households/h-legacy/pets/p-dog.medications[1].frequency');
   });
 
   test('a clean restore says what it actually proved, including the tolerated retype', async () => {
