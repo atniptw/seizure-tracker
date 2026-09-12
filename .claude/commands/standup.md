@@ -12,8 +12,9 @@ Produce a standup snapshot for the SeizureTracker team. **Read-only** — change
 4. **Stranded** —
    - commits on `main` not pushed: `git log origin/main..main --oneline`
    - recent `main` commits whose message has no `#<issue>` reference
-   - whether `.claude/team/review-verdict.md` and `.claude/team/last-green` are fresh (newer than
-     `HEAD`) or stale
+   - what the merge gate would do right now: `.claude/hooks/team-marker.sh status` (it reports
+     whether each marker covers `HEAD`, and what drifted if not — run it from the checkout you
+     would push from, so run it once per active worktree)
 5. **Team log** — the last few entries in the most recent `.claude/team/log/<date>.md`.
 
 Summarise: what's landed since the last standup, what's in progress, what's blocked, and the one

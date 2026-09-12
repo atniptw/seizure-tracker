@@ -194,13 +194,20 @@ drifted from it before. Four things are non-negotiable and belong in front of yo
    the issue, the worktree, `review-verdict.md`, `last-green`, and the local `.claude/team/log/`.
 2. **The merge gate is a hard block.** A push updating `main` that touches `app/`, `lib/`,
    `test/`, `tools/`, `firestore.rules` or `firestore-tests/` is refused unless `review-verdict.md` says
-   `Status: PASS` *and* `last-green` exists, both newer than the commits being pushed. Docs/config
-   pushes are exempt. Both files are gitignored and human-writable — the deliberate override when
-   Tom reviewed or ran the tests himself. Verify the hooks with `.claude/hooks/test-gates.sh`
-   after touching either.
+   `Status: PASS` *and* `last-green` exists, and **both cover the code being pushed** — each names
+   a commit, and the gate refuses if that commit differs from the pushed `HEAD` in any code path.
+   Age is not the test: an old marker that covers the code passes, a fresh one that doesn't is
+   refused, and touching a file proves nothing. Docs/config pushes are exempt.
+   **Record markers with `.claude/hooks/team-marker.sh` (`green` / `verdict` / `verdict-pass`),
+   never by hand** — it resolves the main checkout from any worktree and stamps the commit.
+   `team-marker.sh status` says what the gate sees and why. Both files stay gitignored and
+   human-writable — the deliberate override when Tom reviewed or ran the tests himself. The rules
+   live in one place, `.claude/hooks/gate-common.sh`; verify with `.claude/hooks/test-gates.sh`
+   after touching any of it.
 3. **Brief specialists with an absolute worktree path and branch**, and check their report says
    which checkout they used. A subagent starts in *your* cwd, not the worktree; on issue #4 that
-   silently sent a mandated review at the wrong commit.
+   silently sent a mandated review at the wrong commit. Check it mechanically too — the recorded
+   verdict's `Checkout:` line names where the review actually ran.
 4. **A rules diff always goes to Tom before it is pushed.**
 
 **Commands.** `/standup`, `/plan-feature <desc>`, `/review`, `/groom`, `/retro`, `/ship` (Phase 2).

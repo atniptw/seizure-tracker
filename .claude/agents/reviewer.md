@@ -38,8 +38,25 @@ Do not rewrite the code yourself.
 
 **Publish your verdict in two places**, with identical content:
 
-1. **`.claude/team/review-verdict.md`**, overwriting it — the merge gate's input. Local and
-   gitignored; the next review overwrites it.
+1. **`.claude/team/review-verdict.md`** — the merge gate's input. Local and gitignored; the next
+   review overwrites it.
+
+   **Record it with the writer, never by hand**, from the worktree you reviewed:
+
+   ```bash
+   .claude/hooks/team-marker.sh verdict /tmp/verdict-<n>.md
+   ```
+
+   Two things it gets right that a hand-written file gets wrong. It resolves the **main
+   checkout** — the hooks read the marker from `CLAUDE_PROJECT_DIR`, so a relative path written
+   while you are in a worktree lands somewhere the gate never looks, and the stale verdict from
+   the previous issue goes on blocking the push: a PASS that both fails the gate and looks like
+   it shouldn't. And it stamps the **commit** your verdict covers, which is what the gate
+   actually checks — a verdict that names a different commit is refused no matter how fresh the
+   file is. It prints the path it wrote; post *that* file to the issue so both copies agree.
+
+   If it warns that the commit you named isn't `HEAD` where you are standing, stop and work out
+   why before overriding. That is the shape of reviewing the wrong checkout.
 2. **A comment on the issue under review** — `gh issue comment <n> --body-file <file>`. This is
    the durable copy. A verdict is what a PR review would be if this repo used PRs; since it
    pushes straight to `main`, the issue is where that record belongs. Without it the reasoning
@@ -82,8 +99,10 @@ so it is worth a sentence even when the code itself was fine.>
 
 `Status: PASS` only when nothing `[blocking]` remains. Otherwise `Status: CHANGES` with the list
 of what must change. The merge-gate hook (`check-review-verdict.sh`) parses the `Status:` line and
-requires the file to be newer than the commit being pushed — a stale or missing verdict hard-blocks
-the push.
+checks that the verdict covers the code being pushed — i.e. that the commit it names differs from
+the pushed `HEAD` in no code path. A missing, non-PASS, or non-covering verdict hard-blocks the
+push. Leave `Commit:` in your header as the commit you read; the writer appends the authoritative
+one.
 
 You never spawn subagents and never edit source or tests. **Return** a short summary: the verdict
 and the top findings.

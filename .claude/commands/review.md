@@ -15,9 +15,18 @@ Give it, explicitly:
   against.
 
 When it returns, check its report states the toplevel and branch it actually reviewed, and that
-they match what you handed it. If they don't, the verdict is void — re-run it.
+they match what you handed it. Then check it mechanically rather than taking the report's word
+for it — the recorded verdict carries the checkout it was written from:
 
-When it returns, report the `Status:` line from `.claude/team/review-verdict.md` and any
-`[blocking]` findings. **Do not merge** — merging is a separate Tech Lead step, allowed only once
-the verdict is `PASS` *and* `.claude/team/last-green` is fresh (both newer than `HEAD`). The
-merge-gate hooks enforce this on `git push`.
+```bash
+tail -5 "$(.claude/hooks/team-marker.sh path)/review-verdict.md"
+```
+
+`Checkout:` must be the worktree you briefed and `Commit:` the tip you expected. If either is
+wrong, the verdict is void — re-run it. This is the cheap version of the issue-#4 catch: a review
+that ran in the main checkout records main's path and main's commit, and says so here.
+
+Report the `Status:` line and any `[blocking]` findings. **Do not merge** — merging is a separate
+Tech Lead step, allowed only once the verdict is `PASS` *and* `.claude/team/last-green` covers the
+same code. `.claude/hooks/team-marker.sh status` tells you where both stand; the merge-gate hooks
+enforce it on `git push`.

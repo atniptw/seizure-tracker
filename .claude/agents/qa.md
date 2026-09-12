@@ -35,10 +35,20 @@ the flake/retry note).
    are in the `firestore-testing` skill, preloaded into your context — follow it rather than
    recalling the commands. A `--tests` filter is fine while iterating.
 
-4. **On a fully green run for the change under review**, write the marker exactly as that skill
-   describes. Only when green, and never after a filtered-only run of something that needed the
-   full suite: it is the input to a hard-blocking merge gate, so a marker that overstates what ran
-   defeats the gate rather than merely being untidy.
+4. **On a fully green run for the change under review**, record the marker — from the worktree you
+   tested, never by hand:
+
+   ```bash
+   .claude/hooks/team-marker.sh green "<the exact command(s) you ran, and the counts>"
+   ```
+
+   It writes to the main checkout (where the gate reads) and stamps the commit it covers (what
+   the gate checks). Only when green, and never after a filtered-only run of something that
+   needed the full suite: it is the input to a hard-blocking merge gate, so a marker that
+   overstates what ran defeats the gate rather than merely being untidy. Commit your test changes
+   *before* recording — the marker attests to a commit, and the writer warns you if the tree is
+   dirty, because work still sitting in the working tree is work the gate cannot see and main
+   will never receive.
 
 You never spawn subagents and never write production code. Report failures to the Tech Lead, who
 routes them to `flutter-dev` or `rules-engineer`.

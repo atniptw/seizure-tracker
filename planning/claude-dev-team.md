@@ -84,11 +84,11 @@ work.
 | 2 | Tech Lead | `EnterWorktree` `issue-<n>-<slug>`; post scope + acceptance criteria + planning ref as an issue comment | issue brief |
 | 3 | Tech Lead → `Plan` *(only if big/unclear)* | step breakdown | sub-tasks on the issue |
 | 4 | Tech Lead → `flutter-dev` | "Implement #<n> per brief + `<doc §>`. Compile/analyze before returning." | code in worktree + summary |
-| 5 | Tech Lead → `qa` | "Tests for #<n>. Run the suite. Write `last-green` on green." | tests + `last-green` |
+| 5 | Tech Lead → `qa` | "Tests for #<n>. Run the suite. Record `last-green` with team-marker.sh on green." | tests + `last-green` |
 | — | Tech Lead | qa red → back to step 4 with qa's failure detail (the only "dialogue", relayed) | — |
 | 6 | Tech Lead → `reviewer` | "Review the #<n> diff. `/code-review high` (+ `security-review` if auth/rules/migration/export). Verdict → file." | `review-verdict.md` |
 | — | Tech Lead | `Status: CHANGES` → back to step 4 with the findings | — |
-| 7 | Tech Lead | verdict `PASS` + `last-green` fresh → merge branch to `main` with `Fixes #<n>`, `git push origin main` | commit on main |
+| 7 | Tech Lead | verdict `PASS` + `last-green` covering the same commit (`team-marker.sh status`) → merge branch to `main` with `Fixes #<n>`, `git push origin main` | commit on main |
 | — | hooks | `check-review-verdict.sh`, `check-green-marker.sh`, `scan-staged-secrets.sh` (pre), `watch-main-ci.sh` (post), `flag-unpushed-main.sh` (stop), `session-brief.sh` (session start) fire automatically | — |
 | 8 | Tech Lead | CI green → issue auto-closed. Update `planning/` if design shifted (or spawn `backlog-owner`). `subagent-log.sh` has already journalled each specialist. | closed issue, updated docs |
 
@@ -144,19 +144,62 @@ actions, and they are different actions.
 
 1. it would update `origin/main` (current branch `main`, or the command names `main`), **and**
 2. the pushed diff (`origin/main..HEAD`) touches a **code path** —
-   `app/` · `lib/` · `test/` · `integration_test/` · `firestore.rules` · `firestore-tests/`, **and**
-3. either `review-verdict.md` is missing / not `Status: PASS` / older than `HEAD`,
-   or `last-green` is missing / older than `HEAD`.
+   `app/` · `lib/` · `test/` · `integration_test/` · `tools/` · `firestore.rules` ·
+   `firestore-tests/`, **and**
+3. either `review-verdict.md` is missing / not `Status: PASS` / **does not cover the code being
+   pushed**, or `last-green` is missing / does not cover it.
 
 Docs-, planning-, and `.claude/`-only pushes are exempt (they still pass through
 `scan-staged-secrets.sh` and `flag-unpushed-main.sh`).
 
-**Override:** both marker files are gitignored and human-writable. When Tom reviews a change
-himself, or runs the suite himself, he writes `Status: PASS` / a fresh timestamp and pushes.
-This is deliberate, not a loophole — the gate exists to stop *silent* skipping, not to remove
-Tom's authority.
+### What "covers" means, and why it is not a timestamp
 
-`review-verdict.md` format is in `.claude/team/README.md`.
+Each marker names the commit it attests to (`Commit:`). The gate diffs that commit against the
+`HEAD` being pushed, over the code paths above. **No code difference means the reviewed code is
+the code that ships** — so a docs or planning commit layered on top of a reviewed change does not
+invalidate it, and a rebase or amend that preserves the content does not either. Any code
+difference blocks.
+
+This replaced an mtime comparison — the marker had to be *newer* than `HEAD` — which was wrong in
+both directions and cost the team real time in each:
+
+- **It waved through work nobody had reviewed.** A `PASS` verdict left over from the previous
+  issue satisfied the gate for the next one as long as the file was newer. `touch` laundered it.
+  The gate could not tell a fresh review from a stale one, which is most of what a merge gate is
+  for.
+- **It blocked work that had been reviewed.** Any commit after the review — a rebase, an amend, a
+  team-log commit on top — made a perfectly good verdict look stale. A gate that cries wolf is
+  worse than no gate, because it trains everyone to reach for the override by reflex.
+
+The commit binding also catches the failure that started all this: on issue #4 the review ran in
+the main checkout rather than the briefed worktree and passed the *previous*, already-merged
+change. A timestamp cannot see that. A commit id can — the verdict names main's tip, the push
+carries the worktree's, and the gate says so.
+
+### Recording a marker
+
+Never hand-write either file. `.claude/hooks/team-marker.sh` resolves the main checkout from
+whatever checkout you are standing in and stamps the commit for you:
+
+```bash
+.claude/hooks/team-marker.sh green "./gradlew test — 412/412"   # qa, on a fully green run
+.claude/hooks/team-marker.sh verdict /tmp/verdict.md            # reviewer, from its worktree
+.claude/hooks/team-marker.sh verdict-pass "reviewed by hand"    # Tom, the override
+.claude/hooks/team-marker.sh status                             # what the gate sees right now
+```
+
+`status` is the one to run when a block message surprises you: it prints both markers, whether
+each covers `HEAD`, and what drifted if not.
+
+**Override:** both marker files are gitignored and human-writable, and `verdict-pass` is the
+one-liner for it. When Tom reviews a change himself, or runs the suite himself, he records the
+marker and pushes. This is deliberate, not a loophole — the gate exists to stop *silent*
+skipping, not to remove Tom's authority.
+
+`review-verdict.md` format is in `.claude/team/README.md`. The rules above live in exactly one
+place in code — `.claude/hooks/gate-common.sh`, shared by both hooks and the writer — because the
+last time the code-path list lived in two hooks, the fix for `tools/` reached only one of them.
+`.claude/hooks/test-gates.sh` (35 assertions) verifies the lot.
 
 ---
 
@@ -220,7 +263,7 @@ backlog looking finished.
   `backlog-owner`.
 - `.claude/commands/` — `standup`, `plan-feature`, `review`, `groom`, `retro`, `ship` (ship is a Phase 2
   placeholder).
-- `.claude/hooks/` — `check-review-verdict.sh`, `check-green-marker.sh` (verified by
+- `.claude/hooks/` — `gate-common.sh` (the shared gate rules), `check-review-verdict.sh`, `check-green-marker.sh`, `team-marker.sh` (verified by
   `test-gates.sh`), `subagent-log.sh`, `session-brief.sh`;
   wired in `.claude/settings.json` (PreToolUse `git push*` ×2, SubagentStop ×1).
 - `.claude/team/` — `README.md`, `log/` (local journal). `log/`, `review-verdict.md` and

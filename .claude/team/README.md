@@ -35,19 +35,36 @@ line-cited review finding does, and its whole value is that the next retro can f
 ## Merge gate
 
 A `git push` that updates `main` **and** touches code (`app/`, `lib/`, `test/`,
-`firestore.rules`, `firestore-tests/`) is hard-blocked unless:
+`integration_test/`, `tools/`, `firestore.rules`, `firestore-tests/`) is hard-blocked unless:
 
 - `review-verdict.md` has `Status: PASS`, and
 - `last-green` exists,
 
-and **both** are newer than the commit(s) being pushed. Docs/config-only pushes are exempt.
+and **both cover the code being pushed**. Docs/config-only pushes are exempt.
 
-Both files are gitignored and human-writable — that's the deliberate override for when Tom is
-the reviewer, or ran the tests himself.
+"Covers" means the marker names a commit (`Commit:`) whose code is identical to what is being
+pushed. Not a timestamp: a marker's age is irrelevant, and touching it proves nothing. A docs
+commit layered on a reviewed change still passes; a code commit does not. Full rationale — and
+the two ways the old mtime rule failed — is in `planning/claude-dev-team.md §4`.
+
+**Never hand-write either file.** `.claude/hooks/team-marker.sh` writes them to the main checkout
+from whatever checkout you are in, and stamps the commit:
+
+```bash
+.claude/hooks/team-marker.sh green "./gradlew test — 412/412"
+.claude/hooks/team-marker.sh verdict /tmp/verdict.md
+.claude/hooks/team-marker.sh verdict-pass "reviewed by hand"   # Tom's override
+.claude/hooks/team-marker.sh status                            # what the gate sees, and why
+```
+
+Both files stay gitignored and human-writable — `verdict-pass` is the deliberate override for
+when Tom is the reviewer, or ran the tests himself.
 
 The gate is evaluated against the checkout the push comes from (the hook's `cwd`), while the two
-markers are always read from the main checkout. Run `.claude/hooks/test-gates.sh` after touching
-either hook — 15 assertions, including the worktree cases where the gate used to fail open.
+markers are always read from the main checkout. The rules live in one file, `gate-common.sh`,
+shared by both hooks and the writer. Run `.claude/hooks/test-gates.sh` after touching any of them
+— 35 assertions, including the worktree cases where the gate used to fail open and the staleness
+cases where it used to fail closed.
 
 ## `review-verdict.md` format
 
@@ -62,4 +79,14 @@ Scope: move seizures + healthNotes reads onto the observations collection
 
 ## Notes
 Rules diff already shown to Tom.
+
+<!-- recorded by team-marker.sh — the gate reads the lines below -->
+Commit: 1f3c9a2e...
+Tree: 8b2d...
+Checkout: /Users/tom/.../.claude/worktrees/issue-12-observations (issue-12-observations)
+Recorded: 2026-09-12T19:40:00Z
 ```
+
+The trailer is appended by `team-marker.sh`; the reviewer writes everything above it. `Checkout:`
+is worth reading back — it is the cheapest way to confirm the review actually happened in the
+worktree it was briefed on.

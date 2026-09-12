@@ -25,13 +25,25 @@ if [ "$branch" = "main" ] && git rev-parse --abbrev-ref --symbolic-full-name '@{
   [ "${ahead:-0}" -gt 0 ] 2>/dev/null && add "$ahead commit(s) on main are unpushed — no CI has run on them."
 fi
 
-# Merge-gate markers: present but older than HEAD is worse than absent, because a
-# stale PASS looks like a fresh one at a glance.
-head_time=$(git log -1 --format=%ct HEAD 2>/dev/null || echo 0)
+# Merge-gate markers. This used to compare each marker's mtime against main's HEAD
+# and call anything older "stale" — which was noise, because the markers routinely
+# and correctly describe a worktree branch rather than main. The gate's own rule is
+# whether a marker covers the code being pushed, and that can only be judged from
+# the checkout doing the pushing, which is not necessarily this one.
+#
+# So report what the markers point at, and warn only about the state that is
+# genuinely broken everywhere: a marker that names no commit at all, which the gate
+# refuses from any checkout.
 for f in .claude/team/review-verdict.md .claude/team/last-green; do
   [ -f "$f" ] || continue
-  t=$(stat -f %m "$f" 2>/dev/null || stat -c %Y "$f" 2>/dev/null || echo 0)
-  [ "${t:-0}" -lt "${head_time:-0}" ] && add "$f is older than HEAD — stale, and the merge gate will refuse a code push."
+  sha=$(grep -iE '^[[:space:]]*Commit:' "$f" 2>/dev/null | tail -1 \
+        | sed -E 's/^[[:space:]]*[^:]*:[[:space:]]*//' | tr -d '[:space:]')
+  if [ -z "$sha" ]; then
+    add "$f names no commit — the merge gate will refuse a code push. Re-record it with .claude/hooks/team-marker.sh."
+  elif ! git merge-base --is-ancestor "$sha" HEAD 2>/dev/null; then
+    desc=$(git describe --all --always "$sha" 2>/dev/null || echo "$sha")
+    add "$f covers $desc, which is not in main yet — it is for work still in flight, not for a push from here."
+  fi
 done
 
 # Worktrees whose branch is fully merged into main: finished work still on disk.

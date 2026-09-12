@@ -89,14 +89,18 @@ so nobody reads a green marker as covering lint.
 filtered-only run of something that needs the full suite. It is the input to a hard-blocking
 merge-gate hook, so a marker that overstates what ran defeats the gate:
 
-**Write it into the main checkout, not the worktree you are testing in.** Both gate hooks read
-the marker from `CLAUDE_PROJECT_DIR` — the main checkout — so a relative path writes a marker in
-a worktree that the gate will never look at, and the stale one in the main checkout still blocks
-the push. `--git-common-dir` resolves to the right place from either:
+**Use the writer; do not hand-write the file.** Run this from the worktree you tested in:
 
 ```bash
-marker="$(dirname "$(git rev-parse --git-common-dir)")/.claude/team/last-green"
-{ date -u +%Y-%m-%dT%H:%M:%SZ; echo "branch: $(git rev-parse --abbrev-ref HEAD)"; echo "commit: $(git rev-parse --short HEAD)"; echo "ran: <what you ran>"; } > "$marker"
+.claude/hooks/team-marker.sh green "<what you ran, with counts>"
 ```
 
-Verify the hooks that read it with `.claude/hooks/test-gates.sh`.
+It handles the two things that have gone wrong before. It writes into the **main checkout** —
+both gate hooks read the marker from `CLAUDE_PROJECT_DIR`, so a relative path writes a marker in
+a worktree the gate never looks at, while the stale one in the main checkout goes on blocking the
+push. And it stamps the **commit** the run covers, which is what the gate compares against the
+code being pushed; an unstamped marker is refused. Commit first — the writer warns on a dirty
+tree, because a marker cannot attest to uncommitted work.
+
+`team-marker.sh status` prints what the gate currently sees and whether it covers `HEAD`. Verify
+the hooks themselves with `.claude/hooks/test-gates.sh`.
