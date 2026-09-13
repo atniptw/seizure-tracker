@@ -262,10 +262,52 @@ function newReport() {
   return { counts: {}, missingParents: [], unknownCollections: [], seenCollections: new Set() };
 }
 
+/**
+ * Un-record a document and everything beneath it from a crawl report.
+ *
+ * A crawl records into FOUR places keyed by path — `counts` (one key per collection path, at every
+ * depth), `unknownCollections`, `missingParents` and `seenCollections` — so anything that drops a
+ * crawled document after the fact has to drop all four or the report describes documents that are
+ * no longer there. Both callers do exactly that: `backup.js` drops a `codeIndex` code outside
+ * `--household`, and `restore.js` disowns an out-of-scope code during verification. Adjusting only
+ * the top-level count (the obvious key) left the subcollection keys behind, and then a manifest
+ * claimed a collection the dump did not carry / a verification counted a collection the restore
+ * deliberately left alone — reported as `FAILED` on a correct restore, after the delete committed.
+ *
+ * `docPath` is a full document path (`codeIndex/QQQ777`). Its own top-level count key is NOT
+ * touched: that is the count of the collection it lived in, which still holds its siblings, so its
+ * caller owns that number (`counts.codeIndex -= 1` for an existing document, nothing for a
+ * fieldless one).
+ */
+function forgetSubtree(report, docPath) {
+  const prefix = `${docPath}/`;
+  const under = (p) => p === docPath || p.startsWith(prefix);
+
+  for (const key of Object.keys(report.counts)) if (under(key)) delete report.counts[key];
+  report.unknownCollections = report.unknownCollections.filter((p) => !under(p));
+  report.missingParents = report.missingParents.filter((p) => !under(p));
+
+  // seenCollections is templated (`codeIndex/*/history`), so one entry can be contributed by
+  // several sibling documents and a surviving sibling must keep it. Drop only the templates
+  // beneath this document's own level that nothing left in `counts` still contributes — and only
+  // those, so a count key an unrelated caller deleted on purpose cannot take a template with it.
+  const levelPrefix = `${templatePath(docPath)}/`;
+  const stillSeen = new Set(Object.keys(report.counts).map(templatePath));
+  for (const template of [...report.seenCollections]) {
+    if (template.startsWith(levelPrefix) && !stillSeen.has(template)) {
+      report.seenCollections.delete(template);
+    }
+  }
+}
+
 /** Check the crawl against EXPECTATIONS[name]. Returns a list of human-readable problems. */
 function checkExpectations(report, name, householdIds) {
+  // Own-property check: a bracket lookup resolves through Object.prototype, so "constructor" and
+  // "toString" were accepted here as silent no-ops (see backup.js's flag validation).
+  if (!Object.keys(EXPECTATIONS).includes(name)) {
+    throw new Error(`Unknown --expect value "${name}" (${Object.keys(EXPECTATIONS).join('|')})`);
+  }
   const expectation = EXPECTATIONS[name];
-  if (!expectation) throw new Error(`Unknown --expect value "${name}" (legacy|target|none)`);
   const problems = [];
   for (const [level, required] of Object.entries(expectation)) {
     for (const collectionId of required) {
@@ -335,6 +377,7 @@ module.exports = {
   crawlDocument,
   crawlCollection,
   newReport,
+  forgetSubtree,
   checkExpectations,
   flattenForWrite,
   findIntegralDoubles,

@@ -86,10 +86,14 @@ function decodeValue(value, firestore) {
     // committed. Refuse instead, for the same reason and at the same point as the `{"@double":
     // "12.5"}` case below: a pre-delete refusal naming the fix beats a post-delete false alarm, and
     // it keeps the on-disk format exactly one thing (every number tagged, in both directions).
+    // BigInt, not Math.trunc alone: the integer branch decodes its payload with BigInt(), and
+    // String(Math.trunc(1e21)) is "1e+21", on which BigInt() throws — so the suggested spelling
+    // was itself undecodable for any value large enough to render in exponential notation.
+    const asInt = Number.isFinite(value) ? String(BigInt(Math.trunc(value))) : String(value);
     throw new Error(
       `Cannot decode dump value ${JSON.stringify(value)}: a bare JSON number is not a valid dump ` +
         'value, because Firestore distinguishes integer from double and JSON does not. Write ' +
-        `{"@double": ${JSON.stringify(value)}} for a double, or {"@int": "${Math.trunc(value)}"} ` +
+        `{"@double": ${JSON.stringify(value)}} for a double, or {"@int": "${asInt}"} ` +
         'for an integer.'
     );
   }
@@ -193,7 +197,17 @@ function collectIntegralDoubles(encoded, pathPrefix, acc) {
     if (isIntegralDouble(encoded['@double'])) acc.push(pathPrefix);
     return acc;
   }
-  if (tag === '@map') return collectIntegralDoubles(encoded['@map'], pathPrefix, acc);
+  if (tag === '@map') {
+    // Iterate the unwrapped map's ENTRIES; do not recurse on the map itself. `@map` wraps a map
+    // precisely because its single key looks like a tag, so a recursive call ran taggedKey() on
+    // the inner map again, took the tag branch and returned — an integral double inside
+    // {"@map":{"@int":{"@double":12}}} was never disclosed in the dry run and surfaced only as the
+    // post-restore "absent from the dump's manifest" warning.
+    for (const [k, v] of Object.entries(encoded['@map'])) {
+      collectIntegralDoubles(v, `${pathPrefix}.${k}`, acc);
+    }
+    return acc;
+  }
   if (tag) return acc;
   if (isPlainObject(encoded)) {
     for (const [k, v] of Object.entries(encoded)) collectIntegralDoubles(v, `${pathPrefix}.${k}`, acc);

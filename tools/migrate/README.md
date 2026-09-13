@@ -397,8 +397,10 @@ unset GOOGLE_APPLICATION_CREDENTIALS        # if you used the key-file path. ADC
 #   /Users/tom/.nvm/versions/node/v24.13.0/bin/firebase emulators:start --project $EMU --only firestore
 export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
 node restore.js "$PROD_DUMP" --project=$EMU --allow-project-mismatch --commit
-# -> must end: "OK: every restored collection matches the dump manifest — per-collection
-#    counts, the document-id set, and a field-by-field value compare of all N document(s)."
+# -> must end: "OK: every restored collection matches the dump manifest — all C per-collection
+#    count(s), the document-id set (I check(s)), and a field-by-field value compare of all N
+#    document(s)." The numbers carry the signal: N is how many documents were compared field by
+#    field, and it must match what the dry run planned.
 
 # ---- 4. Prove it from a clean slate too — this is the step that matters ----
 curl -X DELETE "http://127.0.0.1:8080/emulator/v1/projects/$EMU/databases/(default)/documents"

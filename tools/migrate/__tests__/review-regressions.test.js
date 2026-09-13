@@ -25,6 +25,16 @@ beforeAll(() => { db = H.db(); });
 beforeEach(async () => { await H.clearFirestore(); });
 
 const readDump = (file) => JSON.parse(H.fs.readFileSync(file, 'utf8'));
+/** Documents a dump actually carries — what manifest.totalDocuments claims to be. */
+const dumpedDocumentCount = (dump) => {
+  let n = 0;
+  const walk = (node) => {
+    if (node.exists) n += 1;
+    for (const docs of Object.values(node.collections)) Object.values(docs).forEach(walk);
+  };
+  for (const docs of Object.values(dump.collections)) Object.values(docs).forEach(walk);
+  return n;
+};
 const writeDump = (file, dump) => H.fs.writeFileSync(file, JSON.stringify(dump, null, 2));
 
 // --- blocking 1: a --no-codeindex dump must not be restorable under a mode that deletes ---------
@@ -766,5 +776,191 @@ describe('round-2 nits', () => {
     const dump = readDump(H.newestDump(out));
     expect(dump.manifest.counts.codeIndex).toBe(1); // ABC123 only, and not 0
     expect(Object.keys(dump.collections.codeIndex)).toEqual(['ABC123']);
+
+    // Round 3, same fixture, the other half of the same leak: dropping the node adjusted only the
+    // top-level count, so the manifest still described the subtree it no longer carried. Asserting
+    // the reported symptom and not the fixture's whole reach is what let this survive a round.
+    expect(Object.keys(dump.manifest.counts)).not.toContain('codeIndex/QQQ777/history');
+    // The number the operator is shown, against the documents the file actually holds.
+    expect(dump.manifest.totalDocuments).toBe(dumpedDocumentCount(dump));
+    expect(dump.manifest.unknownCollections).not.toContain('codeIndex/QQQ777/history');
+    expect(dump.manifest.missingParents).not.toContain('codeIndex/QQQ777');
+  });
+});
+
+// --- round-3 blocking: a manifest must describe the dump that was written ------------------------
+describe('a dump narrowed with --household', () => {
+  test('restores cleanly onto an empty project under the default --codeindex=scoped', async () => {
+    // The rehearsal's step 4, "the step that matters": clear the project, restore, expect OK.
+    // Pre-fix the manifest carried counts['codeIndex/QQQ777/history'] = 1 for a code the dump had
+    // dropped, so the count check reported "manifest says 1 doc(s), the collection does not exist
+    // in the target" — FAILED on a correct restore, after the delete pass had committed.
+    await H.seedLegacyHousehold(db);
+    await db.doc('codeIndex/QQQ777/history/h1').set({ note: 'owned by nobody' });
+    const out = H.tmpDir();
+    await H.run(backup.main, [PROJECT, `--out=${out}`, '--household=h-legacy']);
+    const dumpFile = H.newestDump(out);
+
+    await H.clearFirestore();
+    const res = await H.run(restore.main, [dumpFile, PROJECT, '--commit']);
+    expect(res.out).toContain(OK_LINE);
+    expect(res.code).toBe(0);
+    expect((await db.doc('codeIndex/ABC123').get()).get('householdId')).toBe('h-legacy');
+  });
+
+  test('restores cleanly under --codeindex=all, which deletes the out-of-scope subtree', async () => {
+    // The other route to the same manifest defect: here the subtree really is deleted, so the
+    // target correctly does not hold it and the manifest was correctly wrong about it.
+    await H.seedLegacyHousehold(db);
+    await db.doc('codeIndex/QQQ777/history/h1').set({ note: 'owned by nobody' });
+    const out = H.tmpDir();
+    await H.run(backup.main, [PROJECT, `--out=${out}`, '--household=h-legacy']);
+    const dumpFile = H.newestDump(out);
+
+    const res = await H.run(restore.main, [dumpFile, PROJECT, '--codeindex=all', '--commit']);
+    expect(res.out).toContain(OK_LINE);
+    expect(res.code).toBe(0);
+    expect((await db.doc('codeIndex/QQQ777/history/h1').get()).exists).toBe(false);
+  });
+});
+
+// --- round-3, the same defect on the verification side ------------------------------------------
+describe('a codeIndex document the restore deliberately leaves in place', () => {
+  test('does not fail the verification it is excluded from', async () => {
+    // The mirror image of the blocking finding, found while fixing it and reachable from a
+    // full-project dump with no narrowing flag at all. `scoped` disowns every code outside the
+    // dump — deleting it from actualCodeIndex and recomputing counts.codeIndex — and warns that it
+    // is leaving it in place. But the verification crawl had already recorded
+    // counts['codeIndex/QQQ777/history'], and that key survived the disowning: "not in the
+    // manifest but the target now holds 1 doc(s)", FAILED, after the delete had committed.
+    await H.seedLegacyHousehold(db);
+    const out = H.tmpDir();
+    await H.run(backup.main, [PROJECT, `--out=${out}`]);
+    const dumpFile = H.newestDump(out);
+
+    // Appears in the target after the dump was taken, owning a subcollection and no fields.
+    await db.doc('codeIndex/QQQ777/history/h1').set({ note: 'stale' });
+
+    const res = await H.run(restore.main, [dumpFile, PROJECT, '--commit']);
+    expect(res.out).toContain('left in place');
+    expect(res.out).toContain(OK_LINE);
+    expect(res.code).toBe(0);
+    // Left alone, as the warning said: `scoped` owns only the dump's codes.
+    expect((await db.doc('codeIndex/QQQ777/history/h1').get()).exists).toBe(true);
+  });
+});
+
+// --- round-3 nits -------------------------------------------------------------------------------
+describe('round-3 nits', () => {
+  test('--only naming a collection beneath codeIndex/ writes AND verifies it, deleting no more', async () => {
+    // codeIndexInScope asked selected('codeIndex', only) — false for an --only *below* codeIndex/ —
+    // while the write-job filter asked per document and said yes. Documents were written and never
+    // verified: "missing from target", FAILED, after the delete. The fix puts codeIndex in play for
+    // such an --only, so the delete loop now has to filter per reference like the households loop
+    // does, or it would delete the code document itself, which --only did not name.
+    await H.seedLegacyHousehold(db);
+    await db.doc('codeIndex/ABC123/history/h1').set({ note: 'previous owner' });
+    const out = H.tmpDir();
+    await H.run(backup.main, [PROJECT, `--out=${out}`]);
+    const dumpFile = H.newestDump(out);
+
+    await db.doc('codeIndex/ABC123/history/h1').set({ note: 'clobbered' });
+    const res = await H.run(restore.main, [dumpFile, PROJECT, '--only=codeIndex/ABC123/history', '--commit']);
+    expect(res.out).toContain(OK_LINE);
+    expect(res.code).toBe(0);
+    expect((await db.doc('codeIndex/ABC123/history/h1').get()).get('note')).toBe('previous owner');
+    // Named a subcollection, so the code document and the household are untouched.
+    expect((await db.doc('codeIndex/ABC123').get()).get('householdId')).toBe('h-legacy');
+    expect((await db.doc('households/h-legacy').get()).exists).toBe(true);
+  });
+
+  test('a dump claiming --no-codeindex while carrying codes is refused before the delete', async () => {
+    // The mirror image of the scope.households orphan guard, refused on the same grounds: every
+    // reader treats the flag as the truth, so those codes would be written and then not verified.
+    await H.seedLegacyHousehold(db);
+    const out = H.tmpDir();
+    await H.run(backup.main, [PROJECT, `--out=${out}`]);
+    const dumpFile = H.newestDump(out);
+    const dump = readDump(dumpFile);
+    dump.scope.includeCodeIndex = false;
+    writeDump(dumpFile, dump);
+
+    await expect(H.run(restore.main, [dumpFile, PROJECT, '--commit']))
+      .rejects.toThrow(/scope\.includeCodeIndex is false but collections\.codeIndex holds 1 code/);
+    expect((await db.doc('households/h-legacy').get()).exists).toBe(true);
+  });
+
+  test('the retype warning survives a slash in the field name', async () => {
+    // A NON-regression test, deliberately: this passes before the change as well as after. The
+    // reported defect — cutting the entry at its last '/' drops the disclosure for a map key
+    // containing a slash — is not actually reachable, because the mis-cut prefix still satisfies
+    // `selected()`'s trailing-slash prefix test for every `only` that selects the document (see
+    // restore.js). The filter was rewritten to stop parsing the entry anyway, so this pins the
+    // property rather than a fix. The manifest entry is hand-written because the Admin SDK cannot
+    // create a map key containing a slash; the filter it exercises is string-level either way.
+    await H.seedLegacyHousehold(db);
+    const out = H.tmpDir();
+    await H.run(backup.main, [PROJECT, `--out=${out}`]);
+    const dumpFile = H.newestDump(out);
+    const dump = readDump(dumpFile);
+    const petId = Object.keys(dump.collections.households['h-legacy'].collections.pets)[0];
+    dump.manifest.integralDoubleFields = [`households/h-legacy/pets/${petId}.a/b`];
+    writeDump(dumpFile, dump);
+
+    const res = await H.run(restore.main, [dumpFile, PROJECT, '--only=households/h-legacy/pets']);
+    expect(res.out).toContain('will come back as Firestore integers');
+    expect(res.out).toContain(`households/h-legacy/pets/${petId}.a/b`);
+  });
+
+  test('--expect values that exist only on Object.prototype are refused', async () => {
+    // `!EXPECTATIONS[expect]` resolved through the prototype chain, so these four passed the guard
+    // and then behaved as --expect=none while recording the bogus name in the dump's source.expect.
+    for (const bogus of ['constructor', 'toString', 'hasOwnProperty', '__proto__']) {
+      await expect(H.run(backup.main, [PROJECT, `--out=${H.tmpDir()}`, `--expect=${bogus}`]))
+        .rejects.toThrow(/--expect must be one of legacy\|target\|none/);
+    }
+  });
+
+  test('a flag given twice is refused rather than resolved last-wins', async () => {
+    // The parser's own thesis is that the operator's stated intent and the run's actual scope must
+    // not differ silently. `--only=a --only=b` ran with b and said nothing.
+    await expect(H.run(backup.main, [PROJECT, PROJECT, '--out=/tmp/never']))
+      .rejects.toThrow(/--project was given more than once/);
+    await expect(H.run(restore.main, ['d.json', PROJECT, '--only=households', '--only=codeIndex']))
+      .rejects.toThrow(/--only was given more than once/);
+    await expect(H.run(restore.main, ['d.json', PROJECT, '--commit', '--commit']))
+      .rejects.toThrow(/--commit was given more than once/);
+  });
+
+  test('the final verdict line survives a reader that does not drain stdout', async () => {
+    // process.exit() discards whatever is still queued on stdout, and stdout is asynchronous to a
+    // pipe: piping a run with many warnings into a slow reader lost the tail — including the
+    // OK:/FAILED: line that migration.md §7's irreversible delete is gated on. Measured through a
+    // real pipe with a reader that pauses, because that is the condition that triggers it; a
+    // prompt reader loses nothing and shows nothing.
+    const script = (mode) => `
+      const { exitWhenFlushed } = require(${JSON.stringify(require.resolve('../lib/cli'))});
+      for (let i = 0; i < 4000; i++) console.log('warning line ' + i + ' ${'x'.repeat(60)}');
+      console.log('OK: the verdict line');
+      ${mode === 'flushed' ? 'exitWhenFlushed(0);' : 'process.exit(0);'}
+    `;
+    const readSlowly = (mode) => new Promise((resolve) => {
+      const child = require('child_process').spawn(process.execPath, ['-e', script(mode)], {
+        stdio: ['ignore', 'pipe', 'inherit'],
+      });
+      let buf = '';
+      child.stdout.pause();
+      setTimeout(() => { child.stdout.on('data', (d) => { buf += d; }); child.stdout.resume(); }, 500);
+      child.on('exit', (code) => setTimeout(() => resolve({ code, out: buf }), 300));
+    });
+
+    const flushed = await readSlowly('flushed');
+    expect(flushed.code).toBe(0);
+    expect(flushed.out).toContain('OK: the verdict line');
+    expect(flushed.out.split('\n').filter(Boolean)).toHaveLength(4001);
+
+    // The pre-fix entrypoint, for evidence that the condition above really is the triggering one.
+    const exited = await readSlowly('exit');
+    expect(exited.out).not.toContain('OK: the verdict line');
   });
 });

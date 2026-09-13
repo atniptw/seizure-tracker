@@ -13,11 +13,12 @@
 const fs = require('fs');
 const path = require('path');
 const {
-  initFirestore, crawlDocument, crawlCollection, newReport, checkExpectations, findIntegralDoubles,
-  EXPECTATIONS,
+  initFirestore, crawlDocument, crawlCollection, newReport, forgetSubtree, checkExpectations,
+  findIntegralDoubles, EXPECTATIONS,
 } = require('./lib/firestore');
 const {
-  parseArgs, list, log, warn, countTable, describeCredential, HEALTH_DATA_WARNING,
+  parseArgs, list, log, warn, countTable, describeCredential, exitWhenFlushed,
+  HEALTH_DATA_WARNING,
 } = require('./lib/cli');
 
 const FORMAT = 'seizuretracker-firestore-dump/1';
@@ -69,7 +70,12 @@ async function main(argv) {
   // cost a full read and then exited 2 with no dump written, which is a real cost on Spark and a
   // bad thing to discover inside the migration window.
   const expect = flags.expect === undefined ? 'legacy' : String(flags.expect);
-  if (!EXPECTATIONS[expect]) {
+  // Object.keys().includes(), not EXPECTATIONS[expect]: a bracket lookup resolves through
+  // Object.prototype, so --expect=constructor / toString / hasOwnProperty / __proto__ all passed
+  // this guard AND checkExpectations (Object.entries of a function is []), behaving as
+  // --expect=none while recording the bogus name in the dump's `source.expect`. This is the shape
+  // --codeindex uses two files away.
+  if (!Object.keys(EXPECTATIONS).includes(expect)) {
     throw new Error(
       `--expect must be one of ${Object.keys(EXPECTATIONS).join('|')} (got "${expect}"). ` +
         'Refused before reading the project rather than after.'
@@ -127,11 +133,20 @@ async function main(argv) {
         const householdId = node.exists ? node.data.householdId : null;
         if (typeof householdId === 'string' && inScope.has(householdId)) continue;
         delete collections.codeIndex[code];
-        // Only existing documents were counted into report.counts by crawlCollection, so only
-        // those may be decremented. Counting a fieldless dropped node (a codeIndex doc that owns a
-        // subcollection — reachable, if unlikely) pushed the manifest count below the truth, and
-        // every restore from that dump then failed verification after committing.
+        // Dropping the node has to drop everything the crawl recorded about it, at every depth, or
+        // the manifest describes a dump that does not exist — and `restore.js` compares the target
+        // against the manifest, so an overstated manifest reports FAILED on a *correct* restore,
+        // after the irreversible delete has committed. Two halves, and both were wrong once:
+        //   - the count of the codeIndex collection itself, here. Only existing documents were
+        //     counted into it by crawlCollection, so only those may be decremented; decrementing
+        //     for a fieldless node too pushed the count below the truth.
+        //   - everything keyed beneath the node — a codeIndex doc that owns a subcollection
+        //     contributes counts['codeIndex/<code>/<sub>'], an unknownCollections entry (nothing
+        //     is known beneath codeIndex/{code}) and, when it holds no fields of its own, a
+        //     missingParents entry. Those outlived the node, so the manifest claimed a collection
+        //     the dump did not carry and totalDocuments ran high.
         if (node.exists) dropped += 1;
+        forgetSubtree(report, `codeIndex/${code}`);
         warn(`codeIndex/${code} -> ${householdId} is outside --household, omitted from this dump`);
       }
       report.counts.codeIndex -= dropped;
@@ -218,9 +233,11 @@ async function main(argv) {
 }
 
 if (require.main === module) {
+  // exitWhenFlushed, not process.exit: stdout is asynchronous to a pipe and process.exit()
+  // discards what is still queued, which silently ate the final verdict line under `| less`.
   main(process.argv.slice(2))
-    .then((code) => process.exit(code))
-    .catch((err) => { console.error(`\nbackup.js failed: ${err.message}`); process.exit(2); });
+    .then((code) => exitWhenFlushed(code))
+    .catch((err) => { console.error(`\nbackup.js failed: ${err.message}`); exitWhenFlushed(2); });
 }
 
 module.exports = { main, FORMAT };

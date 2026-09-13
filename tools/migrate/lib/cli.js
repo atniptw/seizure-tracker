@@ -42,6 +42,22 @@ function parseArgs(argv, { valueFlags = [], booleanFlags = null } = {}) {
 
   const flags = {};
   const positional = [];
+  /**
+   * A flag given twice is refused rather than resolved last-wins. Same thesis as the three rules
+   * above: `--only=households/h1/seizures --only=codeIndex` silently ran with only the second, so
+   * the operator's stated intent and the run's actual scope differed with nothing on screen to say
+   * so. Last-wins happens to be the safe direction for `--only` (narrowing) and the wrong one for
+   * `--project`, and neither is worth guessing at — nothing in this package means anything by a
+   * repeat, and a comma-separated list is how both value flags take more than one thing.
+   */
+  const seen = (name) => {
+    if (Object.prototype.hasOwnProperty.call(flags, name)) {
+      throw new Error(
+        `--${name} was given more than once. Which one wins is not something this parser guesses ` +
+          `at: pass it once${needsValue.has(name) ? ' (--' + name + '=a,b for several values)' : ''}.`
+      );
+    }
+  };
   for (const arg of argv) {
     if (!arg.startsWith('--')) { positional.push(arg); continue; }
     const body = arg.slice(2);
@@ -56,6 +72,7 @@ function parseArgs(argv, { valueFlags = [], booleanFlags = null } = {}) {
         );
       }
       if (takesNoValue !== null && !declared(body)) throw unknown(body);
+      seen(body);
       flags[body] = true;
       continue;
     }
@@ -74,6 +91,7 @@ function parseArgs(argv, { valueFlags = [], booleanFlags = null } = {}) {
     if (needsValue.has(key) && value === '') {
       throw new Error(`--${key}= was given with an empty value. Pass a real value or drop the flag.`);
     }
+    seen(key);
     flags[key] = value;
   }
   return { flags, positional };
@@ -121,6 +139,35 @@ function describeCredential(credential) {
   return `service-account key (${credential.path})`;
 }
 
+/**
+ * Exit with `code`, but never before what was printed has actually left the process.
+ *
+ * `process.exit()` discards whatever is still queued on stdout, and stdout is asynchronous
+ * whenever it is a pipe rather than a TTY — so `node restore.js … | less` (or a slow `tee`, or any
+ * reader that does not drain promptly) lost the tail of the output. Measured on this repo's own
+ * output volume against a reader that pauses briefly: `process.exit()` delivered 0 of 4001 lines,
+ * this delivers all 4001. The line lost is the last one printed, which is exactly the
+ * `OK:`/`FAILED:` verdict README step 3 tells the operator to read before migration.md §7's
+ * irreversible cleanup delete — and the more warnings a run prints, the more likely the loss.
+ *
+ * Setting `process.exitCode` alone would be the smaller change but risks the opposite failure: the
+ * Admin SDK keeps its gRPC channel (and its keep-alive timer) open, so the event loop can outlive
+ * `main()` and the command appears to hang after printing its verdict — and an operator mid-window
+ * cannot tell a hang from an unfinished restore. So: flush, then exit for real. If the reader never
+ * drains we stay alive waiting for it, which is the correct behaviour and the same as exitCode's.
+ */
+function exitWhenFlushed(code) {
+  process.exitCode = code;
+  // Empty write == "call me once everything queued ahead of this has gone to the OS". Nothing is
+  // queued on a TTY (writes there are synchronous), so the common case exits immediately.
+  const pending = [process.stdout, process.stderr].filter((s) => s.writableLength > 0);
+  if (!pending.length) { process.exit(code); return; }
+  let waiting = pending.length;
+  for (const stream of pending) {
+    stream.write('', () => { waiting -= 1; if (waiting === 0) process.exit(code); });
+  }
+}
+
 module.exports = {
-  parseArgs, list, log, warn, countTable, describeCredential, HEALTH_DATA_WARNING,
+  parseArgs, list, log, warn, countTable, describeCredential, exitWhenFlushed, HEALTH_DATA_WARNING,
 };

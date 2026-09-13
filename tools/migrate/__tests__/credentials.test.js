@@ -34,9 +34,18 @@ afterEach(() => {
   }
 });
 
+// Removed when this file's tests finish: one of these directories holds a (fake) credential file,
+// and a suite that leaves credential-shaped files in /tmp teaches the wrong habit even when the
+// contents are invented.
+const tmpConfigDirs = [];
+afterAll(() => {
+  while (tmpConfigDirs.length) fs.rmSync(tmpConfigDirs.pop(), { recursive: true, force: true });
+});
+
 /** A temp CLOUDSDK_CONFIG dir, optionally holding a plausible gcloud ADC file. */
 function fakeCloudSdkConfig({ withAdc }) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'seizuretracker-gcloud-'));
+  tmpConfigDirs.push(dir);
   if (withAdc) {
     fs.writeFileSync(
       path.join(dir, 'application_default_credentials.json'),

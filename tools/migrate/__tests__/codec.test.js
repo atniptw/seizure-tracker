@@ -235,3 +235,35 @@ describe('assertUseBigInt', () => {
     }
   });
 });
+
+// --- round-3 nits (review) ----------------------------------------------------------------------
+describe('collectIntegralDoubles under an @map wrapper', () => {
+  test('discloses an integral double inside a tag-lookalike map', () => {
+    // The @map branch recursed on the inner map, so taggedKey() ran again on the very map that was
+    // wrapped *because* its single key looks like a tag, took the tag branch and returned []. The
+    // retype was then tolerated and recorded post-restore, but never disclosed in the dry run.
+    const encoded = encodeValue({ '@int': 12 });
+    expect(encoded).toEqual({ '@map': { '@int': { '@double': 12 } } });
+    expect(collectIntegralDoubles(encoded, 'households/h1/pets/p1.m', []))
+      .toEqual(['households/h1/pets/p1.m.@int']);
+  });
+
+  test('still reports nothing for a genuine tag, and the plain-map case is unchanged', () => {
+    expect(collectIntegralDoubles(encodeValue(12n), 'doc.n', [])).toEqual([]);
+    expect(collectIntegralDoubles(encodeValue({ a: { b: 12 } }), 'doc.m', []))
+      .toEqual(['doc.m.a.b']);
+  });
+});
+
+describe('the bare-number refusal', () => {
+  test('suggests an @int spelling that is itself decodable, for any magnitude', () => {
+    // The message offered {"@int": "1e+21"} for 1e21, and BigInt("1e+21") throws — a named fix
+    // that does not work, on a hand-edit path where the message is all the operator has.
+    const message = (v) => { try { decodeValue(v); return null; } catch (err) { return err.message; } };
+    const suggested = (v) => message(v).match(/\{"@int": "([^"]+)"\}/)[1];
+    expect(suggested(1e21)).toBe('1000000000000000000000');
+    expect(() => BigInt(suggested(1e21))).not.toThrow();
+    expect(suggested(12.7)).toBe('12');
+    expect(suggested(-3.2)).toBe('-3');
+  });
+});

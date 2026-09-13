@@ -697,6 +697,21 @@ and §7's count assertion lean on them:
    **Operational consequence for the window:** read the numbers in the `Plan:` and `OK:` lines, not
    just the words — a zero in either is the only thing that distinguishes "verified everything"
    from "verified nothing".
+6. **The verification gate compares the target against the *manifest*, so the manifest has to
+   describe the dump exactly — and the tool itself could write one that did not.** The crawl keys
+   its per-collection counts by full path at every depth, so anything that drops a crawled document
+   after the fact has to drop everything recorded beneath it too. Dropping only the obvious
+   top-level count left subcollection keys behind in two places: `backup.js --household=<id>`
+   narrowing `codeIndex` (the manifest then claimed a collection the dump did not carry, and
+   `totalDocuments` ran high), and `restore.js`'s `scoped` verification disowning an out-of-scope
+   code (it counted a collection it had deliberately left in place, and says so in a warning one
+   screen earlier). Both surfaced the same way: **`FAILED` on a correct restore, printed after the
+   irreversible delete had committed** — including on the rehearsal's own clean-slate step. Both
+   now go through one `forgetSubtree()` helper. **Operational consequence:** a `FAILED` naming a
+   `codeIndex/<code>/...` collection is the shape this bug had; `codeIndex` documents with
+   subcollections cannot be created by any client under the current `firestore.rules`, so a real
+   dump should never contain one — if the rehearsal reports one, read the manifest before
+   concluding the restore was wrong.
 
 **`migrate.js` properties:**
 - **Idempotent:** deterministic doc ids where possible (observations reuse legacy ids;

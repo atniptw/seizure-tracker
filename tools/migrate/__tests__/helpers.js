@@ -84,9 +84,29 @@ async function snapshotEncoded(instance, ref, acc = {}) {
   return acc;
 }
 
+/**
+ * A temp directory for a test's dump files, removed when the file's tests finish.
+ *
+ * Cleaned up rather than left behind because what lands in here is a dump: the tooling's own
+ * README is emphatic that a dump is an unencrypted health record and must not be left lying
+ * around, and a test suite that leaves 6+ of them per run in /tmp teaches the opposite habit.
+ * These hold fixture data, so this is hygiene, not exposure.
+ */
+const tmpDirs = [];
 function tmpDir() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'st-migrate-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'st-migrate-'));
+  tmpDirs.push(dir);
+  return dir;
 }
+
+/** Remove every directory `tmpDir()` handed out. Registered per test file, see below. */
+function cleanTmpDirs() {
+  while (tmpDirs.length) fs.rmSync(tmpDirs.pop(), { recursive: true, force: true });
+}
+
+// Registered here rather than in each test file so a new file cannot forget it. `afterAll` exists
+// only under Jest; requiring this module outside a test run must not throw.
+if (typeof afterAll === 'function') afterAll(cleanTmpDirs);
 
 /** The newest dump file in `dir`. */
 function newestDump(dir) {
@@ -241,6 +261,7 @@ async function seedOtherHousehold(instance) {
 }
 
 module.exports = {
-  PROJECT_ID, db, clearFirestore, setIntegralDouble, run, snapshotEncoded, tmpDir, newestDump,
+  PROJECT_ID, db, clearFirestore, setIntegralDouble, run, snapshotEncoded, tmpDir, cleanTmpDirs,
+  newestDump,
   seedLegacyHousehold, seedOtherHousehold, Timestamp, GeoPoint, fs, path,
 };

@@ -18,12 +18,13 @@
 
 const fs = require('fs');
 const {
-  initFirestore, crawlDocument, crawlCollection, newReport, flattenForWrite,
+  initFirestore, crawlDocument, crawlCollection, newReport, forgetSubtree, flattenForWrite,
   collectRefsDeepestFirst, commitInChunks, decodeDocument, compareEncodedDocument, newComparison,
   BATCH_SIZE, READ_CHUNK,
 } = require('./lib/firestore');
 const {
-  parseArgs, list, log, warn, countTable, describeCredential, HEALTH_DATA_WARNING,
+  parseArgs, list, log, warn, countTable, describeCredential, exitWhenFlushed,
+  HEALTH_DATA_WARNING,
 } = require('./lib/cli');
 const { FORMAT } = require('./backup');
 
@@ -73,6 +74,20 @@ const MAX_DIFFS_SHOWN = 40;
 const selected = (colPath, only) =>
   only.length === 0 || only.some((o) => colPath === o || colPath.startsWith(`${o}/`));
 
+/**
+ * True if `only` selects anything at or beneath `colPath` — `selected()` plus the other direction,
+ * i.e. an `only` entry nested *below* `colPath`.
+ *
+ * `selected('codeIndex', only)` is the wrong question for "is codeIndex part of this run": with
+ * `--only=codeIndex/QQQ/history` it answers no, while the write-job filter (which tests each
+ * document's own collection) answers yes — so documents were written and then never verified,
+ * which surfaces as `missing from target` → FAILED, after the delete has committed. Every user of
+ * this must apply `selected()` per document as well, exactly as the households pass does; this
+ * only decides whether the collection is in play at all.
+ */
+const intersects = (colPath, only) =>
+  selected(colPath, only) || only.some((o) => o.startsWith(`${colPath}/`));
+
 const collectionOf = (docPath) => docPath.split('/').slice(0, -1).join('/');
 
 function loadDump(file) {
@@ -106,6 +121,19 @@ function loadDump(file) {
       `${file} has no boolean scope.includeCodeIndex — truncated, or not written by backup.js? ` +
         'Without it the restore cannot tell a dump that omitted codeIndex from one that contains ' +
         'it, and guessing wrong deletes join codes it cannot rebuild.'
+    );
+  }
+
+  // The mirror-image inconsistency, refused on the same grounds as the scope.households orphans
+  // below: a dump claiming it omitted codeIndex while carrying codeIndex documents. Everything
+  // downstream reads the flag, so those documents would be written and then not verified —
+  // `missing from target`, FAILED, after the delete. backup.js writes `{}` under --no-codeindex,
+  // so this too is one hand edit away and none of its own making.
+  if (dump.scope.includeCodeIndex === false && Object.keys(dump.collections.codeIndex || {}).length) {
+    throw new Error(
+      `${file} is internally inconsistent: scope.includeCodeIndex is false but ` +
+        `collections.codeIndex holds ${Object.keys(dump.collections.codeIndex).length} code(s). ` +
+        'A restore would write them and then not verify them. Re-take the dump.'
     );
   }
 
@@ -270,7 +298,7 @@ async function main(argv) {
   // and the verification below read this one flag, so they cannot disagree about whether the
   // collection is part of this restore — which is what let --codeindex=none report FAILED on a
   // perfect restore (writes queued, verification skipped).
-  const codeIndexInScope = dump.scope.includeCodeIndex !== false && selected('codeIndex', only);
+  const codeIndexInScope = dump.scope.includeCodeIndex !== false && intersects('codeIndex', only);
   const dumpedCodes = new Set(Object.keys(dump.collections.codeIndex || {}));
 
   log(`Dump:   ${dumpFile}`);
@@ -312,8 +340,16 @@ async function main(argv) {
         // The subtree, not just the document: deleting a document does not delete its
         // subcollections, so a `codeIndex/{code}/...` document would survive a mode whose whole
         // meaning is "all" — the same reason the household delete set is built with this function.
-        if (codeIndexMode === 'all' || inScope) await collectRefsDeepestFirst(snap.ref, deleteRefs);
-        else codeIndexKept.push(`${snap.ref.path} -> ${householdId}`);
+        if (codeIndexMode === 'all' || inScope) {
+          // Filtered per reference against `only`, the same way the households pass above does.
+          // Unfiltered, an `--only` naming a collection *beneath* codeIndex/ (which now puts
+          // codeIndex in play, see intersects) would delete the code document itself and its other
+          // subcollections — widening the delete past what --only named. With no --only, or
+          // --only=codeIndex, every reference passes and this is the previous behaviour exactly.
+          for (const ref of await collectRefsDeepestFirst(snap.ref, [])) {
+            if (selected(collectionOf(ref.path), only)) deleteRefs.push(ref);
+          }
+        } else codeIndexKept.push(`${snap.ref.path} -> ${householdId}`);
       }
     }
   }
@@ -365,13 +401,24 @@ async function main(argv) {
     );
   }
 
-  // `integralDoubleFields` entries are `<docPath>.<field>`, and the field half never contains a
-  // slash — so the collection is everything before the last slash. Do NOT split on '.': Firestore
-  // document ids may contain periods, which is the same reason the gate itself refuses to split
-  // field paths (`households/h.1/pets/p1.weightKg` split on '.' yields `households`, and the
-  // warning was then silently dropped for exactly the household most in need of it).
-  const retypes = (dump.manifest.integralDoubleFields || [])
-    .filter((f) => selected(f.slice(0, f.lastIndexOf('/')), only));
+  // `integralDoubleFields` entries are `<docPath>.<field>`, and that string cannot be split back
+  // into its halves: Firestore document ids may contain periods and map keys may contain slashes.
+  // Splitting on '.' really did drop warnings (`households/h.1/pets/p1.weightKg` yielded
+  // `households`) — the round-2 fix. Cutting at the last '/' instead, as that fix did, is NOT
+  // reachable: the mis-cut prefix for a slash-bearing field name is always a path *below* the
+  // document's own collection, so `selected()`'s trailing-slash prefix test still matches it for
+  // every `only` that selects the document at all (probed over 320 doc/field/only combinations:
+  // zero drops). This asks the question directly instead, so no parsing rule has to be right: an
+  // entry belongs to this run iff some document this run writes is a prefix of it at a '.'
+  // boundary — and `writeJobs` is already narrowed to `only`. Every '.' is tried, because the
+  // boundary cannot be identified without the document set.
+  const writtenDocPaths = new Set(writeJobs.map((j) => j.path));
+  const retypes = (dump.manifest.integralDoubleFields || []).filter((f) => {
+    for (let i = f.indexOf('.'); i !== -1; i = f.indexOf('.', i + 1)) {
+      if (writtenDocPaths.has(f.slice(0, i))) return true;
+    }
+    return false;
+  });
   if (retypes.length) {
     warn(`${retypes.length} field(s) will come back as Firestore integers rather than doubles`);
     warn('  (Node Admin SDK limit — see lib/codec.js). This retype is the ONLY difference the');
@@ -412,7 +459,17 @@ async function main(argv) {
       // verification has to ignore the rest or every other household's join code reads as an
       // "unexpected" document. Under `all` every other code was deleted, so the whole collection
       // is ours and a leftover IS a real mismatch.
-      for (const code of Object.keys(actualCodeIndex)) if (!dumpedCodes.has(code)) delete actualCodeIndex[code];
+      for (const code of Object.keys(actualCodeIndex)) {
+        if (dumpedCodes.has(code)) continue;
+        delete actualCodeIndex[code];
+        // Disowning the node means disowning everything the crawl recorded beneath it too. A
+        // `codeIndex/{code}` document that owns a subcollection contributes
+        // counts['codeIndex/<code>/<sub>'], and that key outlived the node — so the count check
+        // found a collection the manifest does not mention and reported FAILED on a restore that
+        // had correctly left that code alone (it is even warned about, one screen up, as
+        // "left in place"). Same defect as backup.js's --household narrowing, same helper.
+        forgetSubtree(report, `codeIndex/${code}`);
+      }
       report.counts.codeIndex = Object.values(actualCodeIndex).filter((n) => n.exists).length;
     }
   } else {
@@ -541,9 +598,11 @@ function collectDocs(node, docPath, acc) {
 }
 
 if (require.main === module) {
+  // exitWhenFlushed, not process.exit: stdout is asynchronous to a pipe and process.exit()
+  // discards what is still queued, which silently ate the final verdict line under `| less`.
   main(process.argv.slice(2))
-    .then((code) => process.exit(code))
-    .catch((err) => { console.error(`\nrestore.js failed: ${err.message}`); process.exit(2); });
+    .then((code) => exitWhenFlushed(code))
+    .catch((err) => { console.error(`\nrestore.js failed: ${err.message}`); exitWhenFlushed(2); });
 }
 
 module.exports = { main };
