@@ -101,9 +101,11 @@ writes** — that part stands and is the part that matters. But the access was t
 
 **What was *not* read**, so this section is usable as evidence in both directions: no document
 under `seizures`, `healthNotes`, `vets`, `petVetLinks` or `members` was retrieved — those are
-counts only, plus the `members` document *ids* (which equal the uids) for the array-vs-subcollection
-comparison in item 1. The two pets of `<HOUSEHOLD-3-ID>` are ids only; their fields were never
-read.
+**counts only**, and (corrected 2026-09-13, per the #5 re-review) that includes their document
+*ids*: the enumerated calls project `__name__` on `households` and `pets`, never on `members`. So
+item 1's agreement between the array and the subcollection is a count match, not an id-set match —
+see item 1, where the claim has been narrowed to what these calls prove. The two pets of
+`<HOUSEHOLD-3-ID>` are ids only; their fields were never read.
 
 **Exactly what ran** (Tech Lead, 2026-09-12, transcript in the session that produced this commit),
 all against `projects/<PROJECT-ID>/databases/(default)`, authenticated with a
@@ -138,9 +140,15 @@ Three households, three `codeIndex` entries (one each). A dash means the collect
 exist — `<HOUSEHOLD-2-ID>` has no subcollections at all.
 
 **(1) Three member uids in the live household, not two — resolved by provider, and the admin set
-is settled.** The array and the `members` subcollection agree exactly: three uids, three docs, no
-mismatch either way. Resolved against Firebase Auth 2026-09-12 (provider type only; the
-identities are deliberately not recorded in this doc):
+is settled.** The array holds three uids and the `members` subcollection holds three documents:
+`3 == 3`, from step 3's `COUNT` aggregation against step 5's array. The two id *sets* were not
+compared — no call in the transcript projects `__name__` on `members` — so "no mismatch either
+way" is **not** established here, and this plan does not rely on it: §4 area 1 treats an
+array-vs-subcollection mismatch as something to report rather than normalise, the roles step is
+written per-uid over the array, and the tooling's fixture carries a uid that is in the array with
+no profile doc precisely so that case is exercised. The three uids below are the array's, resolved
+against Firebase Auth 2026-09-12 (provider type only; the identities are deliberately not recorded
+in this doc):
 
 | uid | Provider | Auth account created | Last refresh |
 |---|---|---|---|
@@ -646,8 +654,8 @@ explicit `--project`, since ADC carries no project id. Steps in the tool's READM
   (required for the roles area; a list of any length, not a pair — for the live household it is
   the two Google uids, §2 inventory item 1).
 
-**Four things the plan above didn't anticipate, found while building the dump/restore half.**
-All four are now handled in the tooling; they're recorded here because §5's restore procedure
+**Five things the plan above didn't anticipate, found while building the dump/restore half.**
+All five are now handled in the tooling; they're recorded here because §5's restore procedure
 and §7's count assertion lean on them:
 
 1. **A restore cannot reproduce an integral double.** The Node Admin SDK's serializer encodes
@@ -676,6 +684,19 @@ and §7's count assertion lean on them:
    crawl skips those and silently drops their whole subtree; a pet hard-deleted while its
    medications remained is exactly that shape (the orphan quirk §3's `archived` flag closes). The
    crawl uses `listDocuments()` and records them in `manifest.missingParents`.
+5. **"Exit 0" and "the gate verified something" are different claims, and the operator reads one
+   line.** §7's irreversible cleanup delete is gated on `restore.js`'s `OK:` line, and every check
+   in that gate is narrowed by `--only` — so a scope that selected nothing produced an empty
+   comparison, no disagreements, and the same `OK` line a real restore prints (`all 0
+   document(s)`, exit 0). Three fixes, all in the tooling: an `--only` path that matches nothing in
+   the dump is refused; a run with nothing to delete *and* nothing to write is refused; and the
+   gate itself fails rather than passing when it performed no checks, with the check counts now in
+   the `OK` line. The same class of defect on the input side: a boolean flag given a value
+   (`--allow-prod=false`) used to read as truthy and **open** the gate it names, so both scripts now
+   reject a value on a boolean, a missing value on a value flag, and an unknown flag outright.
+   **Operational consequence for the window:** read the numbers in the `Plan:` and `OK:` lines, not
+   just the words — a zero in either is the only thing that distinguishes "verified everything"
+   from "verified nothing".
 
 **`migrate.js` properties:**
 - **Idempotent:** deterministic doc ids where possible (observations reuse legacy ids;

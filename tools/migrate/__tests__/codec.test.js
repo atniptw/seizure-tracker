@@ -42,6 +42,42 @@ describe('decodeValue @double payload validation', () => {
   });
 });
 
+describe('the other two number shapes decode used to accept', () => {
+  // Both decoded to the RIGHT value, so the round trip was correct — but `compareEncoded` has no
+  // untagged-number case and compares @int payloads exactly, so the verification gate reported a
+  // difference and exited 1 over correct data, after the irreversible delete had committed. The
+  // refusal is at decode (during planning, before anything is touched) rather than a normalisation
+  // in the comparator, which keeps the on-disk format exactly one thing: every number tagged, every
+  // @int payload a decimal string.
+  test('a bare JSON number is refused, and the message names both replacements', () => {
+    expect(() => decodeValue(12.5)).toThrow(/bare JSON number/);
+    expect(() => decodeValue(12.5)).toThrow(/\{"@double": 12\.5\}/);
+    expect(() => decodeValue(12)).toThrow(/\{"@int": "12"\}/);
+    expect(() => decodeDocument({ weightKg: 12.5 })).toThrow(/bare JSON number/);
+    // Nested, too: inside an array and inside a map.
+    expect(() => decodeDocument({ xs: [1] })).toThrow(/bare JSON number/);
+    expect(() => decodeDocument({ m: { n: 1 } })).toThrow(/bare JSON number/);
+  });
+
+  test('a numeric @int payload is refused', () => {
+    expect(() => decodeValue({ '@int': 12 })).toThrow(/must be a decimal string/);
+    expect(decodeValue({ '@int': '12' })).toBe(12n);
+    // The precision argument the refusal rests on: a JSON number past 2^53 has already lost the
+    // value by the time it is parsed, so accepting one would be accepting a wrong integer.
+    expect(() => decodeValue({ '@int': 9007199254740993 })).toThrow(/must be a decimal string/);
+    expect(decodeValue({ '@int': '9007199254740993' })).toBe(9007199254740993n);
+  });
+
+  test('every shape encodeValue emits still decodes', () => {
+    // The refusals must only close shapes the encoder cannot produce.
+    for (const v of [12, 12.5, -0, 0, NaN, Infinity, -Infinity, 2n ** 60n, 'x', true, null]) {
+      const round = decodeValue(encodeValue(v));
+      if (typeof v === 'number' && Number.isNaN(v)) expect(Number.isNaN(round)).toBe(true);
+      else expect(round).toEqual(typeof v === 'bigint' ? v : v);
+    }
+  });
+});
+
 describe('isIntegralDouble — the one tolerated retype', () => {
   test('is exactly the predicate the dump-time reporter uses', () => {
     expect(isIntegralDouble(12)).toBe(true);

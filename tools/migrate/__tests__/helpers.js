@@ -53,13 +53,22 @@ async function setIntegralDouble(docPath, field, value) {
   if (!res.ok) throw new Error(`setIntegralDouble failed: ${res.status} ${await res.text()}`);
 }
 
-/** Run a script's main(), capturing its console output. */
+/**
+ * Run a script's main(), capturing its console output.
+ *
+ * A throw carries the output captured up to that point as `err.out`: a refusal has to be checked
+ * for what it did NOT print (the success line) as well as for its message, and that evidence is
+ * otherwise lost with the spy.
+ */
 async function run(main, argv) {
   const out = [];
   const spy = jest.spyOn(console, 'log').mockImplementation((...args) => out.push(args.join(' ')));
   try {
     const code = await main(argv);
     return { code, out: out.join('\n') };
+  } catch (err) {
+    err.out = out.join('\n');
+    throw err;
   } finally {
     spy.mockRestore();
   }

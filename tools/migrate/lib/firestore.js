@@ -325,6 +325,7 @@ async function commitInChunks(db, items, apply) {
 
 module.exports = {
   BATCH_SIZE,
+  READ_CHUNK,
   EXPECTATIONS,
   KNOWN_COLLECTIONS,
   initFirestore,

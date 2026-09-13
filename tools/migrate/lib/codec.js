@@ -79,15 +79,39 @@ function decodeValue(value, firestore) {
   if (value === null) return null;
   if (typeof value === 'boolean' || typeof value === 'string') return value;
   if (typeof value === 'number') {
-    // Only produced by a hand-edited dump. Treated as a double, which is what JSON means.
-    return value;
+    // Only producible by a hand-edited dump: `encodeValue` tags every number. Accepting it as a
+    // double (which is what JSON means) restored the right value, but the verification gate then
+    // compared the dump's untagged `12.5` against the target's `{"@double": 12.5}` and reported a
+    // difference — a FAILED run, exit 1, over correct data, and *after* the irreversible delete had
+    // committed. Refuse instead, for the same reason and at the same point as the `{"@double":
+    // "12.5"}` case below: a pre-delete refusal naming the fix beats a post-delete false alarm, and
+    // it keeps the on-disk format exactly one thing (every number tagged, in both directions).
+    throw new Error(
+      `Cannot decode dump value ${JSON.stringify(value)}: a bare JSON number is not a valid dump ` +
+        'value, because Firestore distinguishes integer from double and JSON does not. Write ' +
+        `{"@double": ${JSON.stringify(value)}} for a double, or {"@int": "${Math.trunc(value)}"} ` +
+        'for an integer.'
+    );
   }
   if (Array.isArray(value)) return value.map((v) => decodeValue(v, firestore));
 
   const tag = taggedKey(value);
   switch (tag) {
-    case '@int':
-      return BigInt(value['@int']);
+    case '@int': {
+      const raw = value['@int'];
+      // `BigInt(12)` decodes as happily as `BigInt("12")`, but the encoder only ever writes the
+      // string form (a JSON number past 2^53 has already lost precision by the time it is parsed),
+      // and the gate compares `@int` payloads exactly — so a numeric payload restored correctly and
+      // then failed verification after the delete. Same refusal, same reason as the bare number.
+      if (typeof raw !== 'string') {
+        throw new Error(
+          `Cannot decode dump value {"@int": ${JSON.stringify(raw)}}: an @int payload must be a ` +
+            'decimal string, not a JSON number — a JSON number past 2^53 has already lost ' +
+            `precision by the time it is parsed. Write {"@int": "${String(raw)}"}.`
+        );
+      }
+      return BigInt(raw);
+    }
     case '@double': {
       const raw = value['@double'];
       if (raw === 'NaN') return NaN;
@@ -225,6 +249,12 @@ function describeEncoded(value) {
  * against `{"@int": "12"}` in the target. Every tolerated path is recorded in `out.retyped` so the
  * caller can report it and cross-check it against `manifest.integralDoubleFields` — a tolerance
  * that is invisible is indistinguishable from a gate that does not look.
+ *
+ * This rests on both sides being in *one* encoded form: every number tagged, `@int` payloads always
+ * decimal strings. `decodeValue` refuses the two alternative spellings a hand edit can produce (a
+ * bare JSON number, a numeric `@int`) rather than this function normalising them, so there is no
+ * second tolerance here beyond the documented retype — a comparator that accepted shapes the
+ * encoder cannot emit would be a gate with two holes in it instead of a format with one spelling.
  *
  * Paths are built exactly as `collectIntegralDoubles` builds them (`.key` for map keys, `[i]` for
  * array indices, nothing appended for the `@map` wrapper), so a path in `out.retyped` is directly

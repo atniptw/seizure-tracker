@@ -14,6 +14,7 @@ const fs = require('fs');
 const path = require('path');
 const {
   initFirestore, crawlDocument, crawlCollection, newReport, checkExpectations, findIntegralDoubles,
+  EXPECTATIONS,
 } = require('./lib/firestore');
 const {
   parseArgs, list, log, warn, countTable, describeCredential, HEALTH_DATA_WARNING,
@@ -32,6 +33,9 @@ Usage: node backup.js --project=<id> [options]
   --require-expected       Exit non-zero if an expected collection is absent (default: warn).
   --no-codeindex           Skip codeIndex/* (not recommended; the join code lives there).
 
+Every value-taking flag must be written --flag=value, every boolean flag bare (--no-codeindex,
+not --no-codeindex=false), and an unknown flag is rejected rather than ignored. See lib/cli.js.
+
 Emulator:  FIRESTORE_EMULATOR_HOST=localhost:8080 node backup.js --project=demo-seizuretracker-rules-test
 Prod:      gcloud auth application-default login  (preferred), then
              node backup.js --project=<real-project>
@@ -40,14 +44,43 @@ Prod:      gcloud auth application-default login  (preferred), then
 
 /** Flags that must be written --flag=value. See lib/cli.js parseArgs for why this list exists. */
 const VALUE_FLAGS = ['project', 'household', 'out', 'label', 'expect'];
+/** Flags that must be written bare — the other half of the same guard (see lib/cli.js). */
+const BOOLEAN_FLAGS = ['help', 'h', 'no-codeindex', 'require-expected'];
 
 async function main(argv) {
-  const { flags } = parseArgs(argv, { valueFlags: VALUE_FLAGS });
+  const { flags, positional } = parseArgs(argv, {
+    valueFlags: VALUE_FLAGS, booleanFlags: BOOLEAN_FLAGS,
+  });
   if (flags.help || flags.h) { log(USAGE); return 0; }
 
-  const { db, emulatorHost, projectId, credential } = initFirestore({ project: flags.project });
+  // This script takes no positional arguments at all, so one is a flag name forgotten entirely:
+  // `node backup.js h-legacy` dumped EVERY household instead of the one named. Read-only, and the
+  // banner and manifest do record the real scope — but a wider-than-intended dump of a health
+  // record is worth the same three lines restore.js gets.
+  if (positional.length) {
+    throw new Error(
+      `unexpected argument(s): ${positional.join(' ')}. backup.js takes no positional arguments — ` +
+        `did you mean --household=${positional[0]}? Every option is --flag or --flag=value.`
+    );
+  }
+
+  // Validated BEFORE initFirestore and the crawl. checkExpectations throws on an unknown name too,
+  // but it runs after the whole project has been read: `--expect=lgacy` against the live project
+  // cost a full read and then exited 2 with no dump written, which is a real cost on Spark and a
+  // bad thing to discover inside the migration window.
   const expect = flags.expect === undefined ? 'legacy' : String(flags.expect);
+  if (!EXPECTATIONS[expect]) {
+    throw new Error(
+      `--expect must be one of ${Object.keys(EXPECTATIONS).join('|')} (got "${expect}"). ` +
+        'Refused before reading the project rather than after.'
+    );
+  }
+
+  const { db, emulatorHost, projectId, credential } = initFirestore({ project: flags.project });
   const outDir = flags.out ? String(flags.out) : path.join(__dirname, 'dumps');
+  // list() de-duplicates: --household=h1,h1 crawled h1 twice and counted its household document
+  // twice, so the manifest claimed 2 households against one dumped entry and every restore from
+  // that dump then failed verification — after committing. See lib/cli.js.
   const wanted = list(flags.household);
 
   log(`Target: project=${projectId} ${emulatorHost ? `emulator=${emulatorHost}` : 'LIVE PROJECT (no emulator host set)'}`);
@@ -94,7 +127,11 @@ async function main(argv) {
         const householdId = node.exists ? node.data.householdId : null;
         if (typeof householdId === 'string' && inScope.has(householdId)) continue;
         delete collections.codeIndex[code];
-        dropped += 1;
+        // Only existing documents were counted into report.counts by crawlCollection, so only
+        // those may be decremented. Counting a fieldless dropped node (a codeIndex doc that owns a
+        // subcollection — reachable, if unlikely) pushed the manifest count below the truth, and
+        // every restore from that dump then failed verification after committing.
+        if (node.exists) dropped += 1;
         warn(`codeIndex/${code} -> ${householdId} is outside --household, omitted from this dump`);
       }
       report.counts.codeIndex -= dropped;

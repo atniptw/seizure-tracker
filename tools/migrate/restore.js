@@ -20,7 +20,7 @@ const fs = require('fs');
 const {
   initFirestore, crawlDocument, crawlCollection, newReport, flattenForWrite,
   collectRefsDeepestFirst, commitInChunks, decodeDocument, compareEncodedDocument, newComparison,
-  BATCH_SIZE,
+  BATCH_SIZE, READ_CHUNK,
 } = require('./lib/firestore');
 const {
   parseArgs, list, log, warn, countTable, describeCredential, HEALTH_DATA_WARNING,
@@ -36,7 +36,8 @@ Usage: node restore.js <dump.json> --project=<id> [--commit] [options]
                             e.g. --only=households/h1/seizures,households/h1/healthNotes.
                             COLLECTION paths only (an odd number of segments) — a document path
                             like households/h1 is rejected, because it would select h1's
-                            subcollections but not h1's own document.
+                            subcollections but not h1's own document. Checked against the dump:
+                            a path that selects nothing in it is rejected too.
                             Default: everything in the dump.
   --codeindex=scoped|all|none
                             Which codeIndex docs to delete before re-writing (default scoped:
@@ -46,8 +47,10 @@ Usage: node restore.js <dump.json> --project=<id> [--commit] [options]
   --allow-project-mismatch  Required when the dump's project id differs from the target. This is
                             the normal case for the rehearsal (prod dump -> emulator).
 
-Every value-taking flag must be written --flag=value. "--only households/h1/seizures" (with a
-space) is rejected rather than parsed as a bare --only, which would mean "everything".
+Every value-taking flag must be written --flag=value: "--only households/h1/seizures" (with a
+space) is rejected rather than parsed as a bare --only, which would mean "everything". Every
+boolean flag must be written bare: --allow-prod=false is rejected rather than read as the truthy
+string "false", which would OPEN the gate it looks like it closes. An unknown flag is rejected.
 
 Emulator:  FIRESTORE_EMULATOR_HOST=localhost:8080 node restore.js dumps/dump-....json \\
              --project=demo-seizuretracker-rules-test --allow-project-mismatch --commit
@@ -55,6 +58,13 @@ Emulator:  FIRESTORE_EMULATOR_HOST=localhost:8080 node restore.js dumps/dump-...
 
 /** Flags that must be written --flag=value. See lib/cli.js parseArgs for why this list exists. */
 const VALUE_FLAGS = ['project', 'only', 'codeindex', 'dump'];
+/**
+ * Flags that must be written bare. The other half of the same guard, and the half that matters
+ * most here: two of these three are the gates between a --commit run and the live project, and
+ * `--allow-prod=false` used to open them (a non-empty string is truthy). parseArgs refuses a value
+ * on any of these, and the gates below additionally test `=== true` rather than truthiness.
+ */
+const BOOLEAN_FLAGS = ['commit', 'help', 'h', 'allow-prod', 'allow-project-mismatch'];
 
 /** How many field-level differences to print before summarising the rest. */
 const MAX_DIFFS_SHOWN = 40;
@@ -85,6 +95,19 @@ function loadDump(file) {
   if (!dump.scope || !Array.isArray(dump.scope.households)) {
     throw new Error(`${file} has no scope.households array — truncated, or not written by backup.js?`);
   }
+  // Same class as the two guards above, and the same consequence. `scope.includeCodeIndex` is read
+  // as a tri-state by everything downstream (`!== false` means "in scope"), so a dump missing the
+  // key reads as a dump that *contains* codeIndex: under the default `scoped` mode the planner then
+  // deletes every live code pointing into scope with nothing in the dump to write back. The count
+  // check does catch it now — but only after the delete has committed, which is the ordering this
+  // whole fix set exists to eliminate. backup.js always writes the key.
+  if (typeof dump.scope.includeCodeIndex !== 'boolean') {
+    throw new Error(
+      `${file} has no boolean scope.includeCodeIndex — truncated, or not written by backup.js? ` +
+        'Without it the restore cannot tell a dump that omitted codeIndex from one that contains ' +
+        'it, and guessing wrong deletes join codes it cannot rebuild.'
+    );
+  }
 
   // A dump carries two notions of "which households": `scope.households`, which backup.js fills
   // with the households that have a document of their own, and the keys of
@@ -105,8 +128,43 @@ function loadDump(file) {
   return dump;
 }
 
-/** --only takes collection paths. A document path would restore a subtree but not its root doc. */
-function checkOnlyPaths(only) {
+/**
+ * Every collection path this dump could restore: the manifest's own count keys, plus the
+ * collections actually present in the dumped tree (which covers a hand-trimmed manifest), plus the
+ * two roots. Used to check `--only` against the dump rather than only against its own shape.
+ */
+function dumpCollectionPaths(dump) {
+  const paths = new Set(['households']);
+  const walk = (node, docPath) => {
+    for (const [colId, docs] of Object.entries((node && node.collections) || {})) {
+      paths.add(`${docPath}/${colId}`);
+      for (const [docId, child] of Object.entries(docs)) walk(child, `${docPath}/${colId}/${docId}`);
+    }
+  };
+  for (const [id, node] of Object.entries(dump.collections.households)) walk(node, `households/${id}`);
+  if (dump.collections.codeIndex) {
+    paths.add('codeIndex');
+    for (const [id, node] of Object.entries(dump.collections.codeIndex)) walk(node, `codeIndex/${id}`);
+  }
+  for (const key of Object.keys(dump.manifest.counts)) paths.add(key);
+  return paths;
+}
+
+/**
+ * --only takes collection paths that exist in the dump.
+ *
+ * Two separate refusals, because a bad `--only` has two bad shapes:
+ *
+ *  * An even segment count is a *document* path: it would restore a subtree but not its root doc.
+ *  * A path that selects nothing in the dump is the plausible typo — `households/h1/seizure`
+ *    (singular) is an odd three segments, so it passes the shape check, and `selected()`'s
+ *    `${o}/` prefix guard then correctly refuses to let it bleed onto `seizures`. The result was a
+ *    run that planned no deletes, no writes and no verification, and ended on the OK line with
+ *    exit 0 — "verified nothing" rendered as "verified everything", which is the exact line
+ *    `migration.md §7`'s irreversible cleanup delete is gated on.
+ */
+function checkOnlyPaths(only, dump) {
+  const known = dump ? dumpCollectionPaths(dump) : null;
   for (const o of only) {
     if (o.split('/').length % 2 === 0) {
       throw new Error(
@@ -117,11 +175,31 @@ function checkOnlyPaths(only) {
           `(e.g. --only=${o}/seizures), or drop --only to restore everything in the dump.`
       );
     }
+    if (!known) continue;
+    // Matched = it names a collection in the dump, or an ancestor of one (`--only=households`).
+    const matches = [...known].some((p) => p === o || p.startsWith(`${o}/`));
+    if (!matches) {
+      // Siblings first (same parent document), then anything else, capped: the list is collection
+      // paths, not documents, but a dump with many pets still has more than fits on a screen.
+      const parent = o.split('/').slice(0, -1).join('/');
+      const siblings = [...known].filter((p) => p.startsWith(`${parent}/`) && !p.slice(parent.length + 1).includes('/'));
+      const shown = (siblings.length ? siblings : [...known]).sort().slice(0, 20);
+      throw new Error(
+        `--only=${o} selects nothing in this dump: no collection in it is "${o}" or nested under ` +
+          'it. This run would delete nothing, write nothing and verify nothing — and a gate that ' +
+          'verified nothing would print the same OK line a real restore prints, which is why this ' +
+          'is refused rather than reported at the end. Check the spelling (a singular collection ' +
+          `name is the usual cause).\nCollections the dump does hold${siblings.length ? ' at that level' : ''}:\n  ` +
+          `${shown.join('\n  ')}`
+      );
+    }
   }
 }
 
 async function main(argv) {
-  const { flags, positional } = parseArgs(argv, { valueFlags: VALUE_FLAGS });
+  const { flags, positional } = parseArgs(argv, {
+    valueFlags: VALUE_FLAGS, booleanFlags: BOOLEAN_FLAGS,
+  });
   if (flags.help || flags.h) { log(USAGE); return 0; }
 
   // Exactly one positional (the dump file). An extra one is almost always the value half of a
@@ -137,7 +215,7 @@ async function main(argv) {
   const dumpFile = positional[0] || (flags.dump !== true ? flags.dump : undefined);
   const dump = loadDump(dumpFile);
   const only = list(flags.only);
-  checkOnlyPaths(only);
+  checkOnlyPaths(only, dump);
   const codeIndexMode = flags.codeindex === undefined ? 'scoped' : String(flags.codeindex);
   if (!['scoped', 'all', 'none'].includes(codeIndexMode)) {
     throw new Error(`--codeindex must be scoped|all|none (got "${codeIndexMode}")`);
@@ -162,13 +240,16 @@ async function main(argv) {
 
   const { db, emulatorHost, projectId, credential } = initFirestore({ project: flags.project });
 
-  if (!emulatorHost && !flags['allow-prod']) {
+  // `=== true`, not truthiness: parseArgs already refuses `--allow-prod=false`, and these two
+  // gates are the last thing between a --commit run and the live project, so they do not depend on
+  // a second file getting that right. `--commit` above has always been written this way.
+  if (!emulatorHost && flags['allow-prod'] !== true) {
     throw new Error(
       'FIRESTORE_EMULATOR_HOST is not set, so this would run against the LIVE project ' +
         `"${projectId}". Re-run with --allow-prod if that is genuinely what you want.`
     );
   }
-  if (dump.source.projectId !== projectId && !flags['allow-project-mismatch']) {
+  if (dump.source.projectId !== projectId && flags['allow-project-mismatch'] !== true) {
     throw new Error(
       `the dump was taken from project "${dump.source.projectId}" but the target is "${projectId}". ` +
         'Re-run with --allow-project-mismatch if that is intended (it is, for the rehearsal).'
@@ -215,11 +296,25 @@ async function main(argv) {
   const codeIndexKept = [];
   if (codeIndexMode !== 'none' && codeIndexInScope) {
     const scopeIds = new Set(restoreHouseholds);
-    for (const snap of (await db.collection('codeIndex').get()).docs) {
-      const householdId = snap.get('householdId');
-      const inScope = dumpedCodes.has(snap.id) || (typeof householdId === 'string' && scopeIds.has(householdId));
-      if (codeIndexMode === 'all' || inScope) deleteRefs.push(snap.ref);
-      else codeIndexKept.push(`${snap.ref.path} -> ${householdId}`);
+    // listDocuments() + getAll(), not collection.get(), for the reason lib/firestore.js's
+    // crawlDocument documents at length: get() skips a document that holds no fields but does own
+    // a subcollection, so under --codeindex=all such a document survived a mode whose whole
+    // meaning is "all", and verification counts only existing documents so it could not see the
+    // survivor either. The fields are still needed (scoped mode matches on householdId), hence the
+    // fan-out read rather than listDocuments() alone.
+    const codeRefs = await db.collection('codeIndex').listDocuments();
+    for (let i = 0; i < codeRefs.length; i += READ_CHUNK) {
+      const chunk = codeRefs.slice(i, i + READ_CHUNK);
+      for (const snap of await db.getAll(...chunk)) {
+        const householdId = snap.exists ? snap.get('householdId') : undefined;
+        const inScope = dumpedCodes.has(snap.ref.id)
+          || (typeof householdId === 'string' && scopeIds.has(householdId));
+        // The subtree, not just the document: deleting a document does not delete its
+        // subcollections, so a `codeIndex/{code}/...` document would survive a mode whose whole
+        // meaning is "all" — the same reason the household delete set is built with this function.
+        if (codeIndexMode === 'all' || inScope) await collectRefsDeepestFirst(snap.ref, deleteRefs);
+        else codeIndexKept.push(`${snap.ref.path} -> ${householdId}`);
+      }
     }
   }
   for (const kept of codeIndexKept) {
@@ -254,7 +349,29 @@ async function main(argv) {
   log(`\nPlan: delete ${deleteRefs.length} document reference(s), write ${writeJobs.length} ` +
       `document(s), in batches of ${BATCH_SIZE}.`);
 
-  const retypes = (dump.manifest.integralDoubleFields || []).filter((f) => selected(collectionOf(f.split('.')[0].split('[')[0]), only));
+  // A run with nothing to delete AND nothing to write cannot be verified — there is no document to
+  // compare and no collection to count — so its OK line would be a claim about the empty set. That
+  // is the shape the typo'd --only produced, and `checkOnlyPaths` now refuses that case by name and
+  // earlier; this is the same property stated without reference to any flag, so a future scope
+  // narrowing cannot reintroduce it. It is not reachable from a whole-dump restore: the delete set
+  // always contains at least the household references themselves.
+  if (!deleteRefs.length && !writeJobs.length) {
+    throw new Error(
+      `this run would delete nothing and write nothing, so there would be nothing to verify — and ` +
+        'a verification gate with an empty input prints the same OK line a real restore prints. ' +
+        `Refusing instead. ${only.length
+          ? `--only=[${only.join(', ')}] selects no documents in this dump`
+          : `${dumpFile} holds no documents`}.`
+    );
+  }
+
+  // `integralDoubleFields` entries are `<docPath>.<field>`, and the field half never contains a
+  // slash — so the collection is everything before the last slash. Do NOT split on '.': Firestore
+  // document ids may contain periods, which is the same reason the gate itself refuses to split
+  // field paths (`households/h.1/pets/p1.weightKg` split on '.' yields `households`, and the
+  // warning was then silently dropped for exactly the household most in need of it).
+  const retypes = (dump.manifest.integralDoubleFields || [])
+    .filter((f) => selected(f.slice(0, f.lastIndexOf('/')), only));
   if (retypes.length) {
     warn(`${retypes.length} field(s) will come back as Firestore integers rather than doubles`);
     warn('  (Node Admin SDK limit — see lib/codec.js). This retype is the ONLY difference the');
@@ -304,9 +421,13 @@ async function main(argv) {
 
   const expected = expectedCounts(dump, only);
   const mismatches = [];
+  // Every check below is counted, not just its failures. `mismatches.length === 0` means "nothing
+  // disagreed", which is also what an empty comparison produces — see the guard before the OK line.
+  let countChecks = 0;
   for (const path of new Set([...Object.keys(expected), ...Object.keys(report.counts)])) {
     if (!selected(path, only)) continue;
     if (path === 'codeIndex' && !codeIndexInScope) continue;
+    countChecks += 1;
     const want = expected[path];
     const got = report.counts[path];
     if (want === undefined) mismatches.push(`${path}: not in the manifest but the target now holds ${got} doc(s)`);
@@ -319,8 +440,17 @@ async function main(argv) {
   for (const [id, node] of Object.entries(actualHouseholds)) collectDocs(node, `households/${id}`, gotDocs);
   for (const [id, node] of Object.entries(actualCodeIndex)) collectDocs(node, `codeIndex/${id}`, gotDocs);
   const wantPaths = new Set(writeJobs.map((j) => j.path));
-  for (const p of wantPaths) if (!gotDocs.has(p) && selected(collectionOf(p), only)) mismatches.push(`missing from target: ${p}`);
-  for (const p of gotDocs.keys()) if (!wantPaths.has(p) && selected(collectionOf(p), only)) mismatches.push(`unexpected in target: ${p}`);
+  let idChecks = 0;
+  for (const p of wantPaths) {
+    if (!selected(collectionOf(p), only)) continue;
+    idChecks += 1;
+    if (!gotDocs.has(p)) mismatches.push(`missing from target: ${p}`);
+  }
+  for (const p of gotDocs.keys()) {
+    if (!selected(collectionOf(p), only)) continue;
+    idChecks += 1;
+    if (!wantPaths.has(p)) mismatches.push(`unexpected in target: ${p}`);
+  }
 
   // And identity alone says nothing about content: matching counts and matching ids are exactly
   // what a codec regression that wrote {} for every document produces. The verify crawl already
@@ -328,14 +458,33 @@ async function main(argv) {
   // contents is a comparison and not extra I/O. The only tolerated difference is the documented
   // integral-double retype, and every tolerated field is recorded so the tolerance is visible.
   const comparison = newComparison();
+  let contentChecks = 0;
   for (const job of writeJobs) {
     const got = gotDocs.get(job.path);
     if (got === undefined) continue; // already reported above as "missing from target"
+    contentChecks += 1;
     compareEncodedDocument(job.data, got, job.path, comparison);
   }
 
   log('\nPost-restore counts (target):');
   log(countTable(report.counts));
+
+  // The gate's own integrity check, and the one invariant every other check rests on: zero
+  // disagreements is only evidence of a good restore if something was actually compared. With an
+  // empty input — no count check, no id check, no field compare — `mismatches` and
+  // `comparison.diffs` are structurally empty, and the OK line below would then report "verified
+  // everything" for a run that verified nothing. Both known routes to an empty input are refused
+  // before the delete (an unmatched --only, and a plan that does nothing), so this should be
+  // unreachable; it is here because the property "success implies a non-empty verified set" belongs
+  // in the gate rather than in the list of ways to reach it.
+  if (countChecks + idChecks + contentChecks === 0) {
+    log('\nFAILED: this run verified nothing — no collection count, no document id and no field ' +
+        'value was compared, so there is no evidence the target reproduces the dump.');
+    log(`  Scope was: only=${only.length ? `[${only.join(', ')}]` : 'everything in the dump'}, ` +
+        `${writeJobs.length} write job(s), ${deleteRefs.length} delete ref(s).`);
+    log('\nTreat this exactly like a mismatch: do not proceed, and keep the dump file.');
+    return 1;
+  }
 
   const total = mismatches.length + comparison.diffs.length;
   if (total) {
@@ -359,8 +508,12 @@ async function main(argv) {
     }
   }
 
-  log(`\nOK: every restored collection matches the dump manifest — per-collection counts, the ` +
-      `document-id set, and a field-by-field value compare of all ${writeJobs.length} document(s).`);
+  // The numbers are in the line deliberately: "compared nothing" and "compared everything" have to
+  // read differently at a glance, because migration.md §7's irreversible cleanup delete is gated on
+  // this one line and a zero in it is the only thing distinguishing the two.
+  log(`\nOK: every restored collection matches the dump manifest — all ${countChecks} ` +
+      `per-collection count(s), the document-id set (${idChecks} check(s)), and a field-by-field ` +
+      `value compare of all ${contentChecks} document(s).`);
   if (comparison.retyped.length) {
     log(`    (${comparison.retyped.length} integral double(s) came back as Firestore integers — ` +
         'the one documented retype, reported above and in manifest.integralDoubleFields.)');

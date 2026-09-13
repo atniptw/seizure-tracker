@@ -28,6 +28,11 @@ service-account key" as an actor with the same reach as the database itself. So:
 - **Delete the dumps once the `migration.md §7` cleanup has verified.** The exposure is meant to
   be time-boxed to the migration; it is not an ongoing backup (`security-privacy.md §2.4` — there
   is deliberately no cloud backup or PITR on the Spark plan).
+- **A failed restore prints real field values to your terminal.** The verification gate names each
+  differing field and shows both values in full (up to 40 lines), which is what makes a failure
+  actionable — but it means a `FAILED` run puts seizure descriptions and medication notes into
+  shell scrollback and any transcript of that session. Only on a failure, only on your own
+  terminal, and worth knowing before you paste the output anywhere.
 
 Why a hand-rolled JSON dump instead of `gcloud firestore export`: managed export/import needs the
 Blaze plan and a GCS bucket. `architecture.md §9` commits to never needing either — no billing
@@ -186,12 +191,25 @@ a rollback, and it is what makes the result *the dump* rather than the dump merg
 there. It also means a restore is **not** a partial operation: it empties the households in the
 dump's scope and rewrites them.
 
-**Every value-taking flag must be written `--flag=value`.** `--only households/h1/seizures` with a
-space is rejected, not parsed — as a bare `--only` it used to mean "everything", which in the one
-script that deletes turned a one-collection restore into a full-household one. `--only` takes
-**collection** paths (an odd number of segments); a document path like `households/h1` is rejected,
-because it would select `h1`'s subcollections but not `h1`'s own document. The `Scope:` banner line
-always names the selection, including when the selection is "everything in the dump".
+**Flags are parsed strictly, in both directions, because every loose spelling of one lands on the
+same hazard — a run wider or more permissive than what was typed, with nothing on screen to say so:**
+
+- **A value-taking flag must be written `--flag=value`.** `--only households/h1/seizures` with a
+  space is rejected, not parsed — as a bare `--only` it used to mean "everything", which in the one
+  script that deletes turned a one-collection restore into a full-household one.
+- **A boolean flag must be written bare.** `--allow-prod=false` is rejected rather than read as the
+  truthy string `"false"`, which would *open* the gate it looks like it closes. A boolean is on when
+  you name it and off when you leave it out; there is no `=false` spelling of "off".
+- **An unknown flag is rejected.** `--onyl=households/h1/seizures` would otherwise leave `--only`
+  unset, and unset means "everything".
+
+`--only` takes **collection** paths (an odd number of segments); a document path like
+`households/h1` is rejected, because it would select `h1`'s subcollections but not `h1`'s own
+document. It is also checked **against the dump**: a path that selects nothing in it — the singular
+typo `…/seizure`, or a household id that is not in the dump — is refused, because a run that
+restores nothing verifies nothing and would then print the same `OK` line a real restore prints.
+The `Scope:` banner line always names the selection, including when the selection is "everything in
+the dump".
 
 **What the verification gate proves.** It deletes, re-writes, then re-reads and compares the result
 against the dump three ways:
@@ -205,7 +223,9 @@ against the dump three ways:
 
 The **one** tolerated difference is the integral double below, and every tolerated field is
 reported by path and cross-checked against `manifest.integralDoubleFields`. Any other difference
-is listed and the exit code is 1. Writes and deletes are batched in chunks of 400
+is listed and the exit code is 1. The `OK` line carries the number of count checks, id checks and
+documents compared, and a run that compared **nothing** fails rather than passing: zero
+disagreements is only evidence of a good restore if something was actually compared. Writes and deletes are batched in chunks of 400
 (`migration.md §5`; Firestore's hard limit is 500) — that bounds documents per commit, not request
 bytes, which is ample for this dataset but is a document-count guard only.
 
@@ -250,10 +270,14 @@ The remaining limits, all deliberate:
   `firebase-admin ^13.6.0` ships `VectorValue`, which nothing here uses; a document containing one
   would fail `backup.js` with `Unsupported Firestore value of type …`. That is the intended
   behaviour — a dump that quietly omits a field is worse than no dump.
-- **A hand-edited dump is validated on decode, not trusted.** A `@double` payload that is neither a
-  JSON number nor one of `"NaN"`, `"Infinity"`, `"-Infinity"`, `"-0"` aborts the restore. Without
-  that check, the plausible edit `{"@double": "12.5"}` restored `weightKg` as the *string* `"12.5"`,
-  which the Kotlin `Double?` field then reads as `null` on the device.
+- **A hand-edited dump is validated on decode, not trusted.** Every number in a dump is tagged,
+  and there is exactly one spelling of each: `{"@double": <JSON number>}` (or one of the strings
+  `"NaN"`, `"Infinity"`, `"-Infinity"`, `"-0"`) and `{"@int": "<decimal string>"}`. The three
+  plausible hand edits are all refused during planning, before anything is deleted:
+  `{"@double": "12.5"}` (which used to restore `weightKg` as the *string* `"12.5"`, read back as
+  `null` by the Kotlin `Double?` field), a bare `12.5`, and a numeric `{"@int": 12}`. The last two
+  restored the right value but then failed the content compare — a `FAILED` verdict over correct
+  data, *after* the delete — because the gate compares one encoded form against one encoded form.
 
 ## Restore procedure (`migration.md §5`)
 
@@ -288,13 +312,18 @@ node restore.js dumps/<the-window-dump>.json --project=<prod-project-id> --allow
 #      * "Scope: households=[...] codeIndex=... only=..."  — is that the set you meant?
 #      * "Plan: delete N document reference(s), write M document(s)" — N is what is about to be
 #        destroyed. If N is much larger than M, something is in the target that is not in the
-#        dump; understand what before you commit.
+#        dump; understand what before you commit. If either number is 0 or far smaller than you
+#        expected, STOP: the scope is not what you meant. A run with nothing to delete and nothing
+#        to write is refused outright (it could not be verified), but a run that would restore only
+#        part of what you intended is not — that one only shows up in these numbers.
 #      * the per-collection count table.
 
 # ---- 3. Commit. Same command plus --commit. IRREVERSIBLE. ----
 node restore.js dumps/<the-window-dump>.json --project=<prod-project-id> --allow-prod --commit
-# -> must end with "OK: every restored collection matches the dump manifest — per-collection
-#    counts, the document-id set, and a field-by-field value compare of all N document(s)."
+# -> must end with "OK: every restored collection matches the dump manifest — all C
+#    per-collection count(s), the document-id set (I check(s)), and a field-by-field value compare
+#    of all N document(s)." Read the numbers, not just the word OK: N is how many documents were
+#    compared field by field, and it should be the count the dry run planned.
 ```
 
 Then redeploy the previous `firestore.rules` and the previous app build. If step 3 prints

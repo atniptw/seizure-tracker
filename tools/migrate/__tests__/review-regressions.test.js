@@ -441,3 +441,330 @@ describe('the dump directory', () => {
     expect(res.out).toContain('readable outside your user account');
   });
 });
+
+// ================================================================================================
+// Round 2 — the three blocking findings of the re-review at d803ae1. Two of them are defects the
+// round-1 fixes introduced (the parseArgs rewrite hardened only the missing-value direction; the
+// content compare turned two accepted-on-decode number shapes into a post-delete FAILED), and the
+// third came in with `checkOnlyPaths` itself. Each test below failed before its fix.
+// ================================================================================================
+
+// --- blocking 1: a verification gate must never report success over an empty set ----------------
+describe('an --only that selects nothing in the dump', () => {
+  async function legacyDumpFile() {
+    await H.seedLegacyHousehold(db);
+    const out = H.tmpDir();
+    await H.run(backup.main, [PROJECT, `--out=${out}`]);
+    return H.newestDump(out);
+  }
+
+  test('is refused, rather than printing the OK line and exiting 0 over 0 documents', async () => {
+    // The reviewer's reproduction. `households/h-legacy/seizure` (singular) is an odd three
+    // segments, so the shape check passed; `selected()`'s `${o}/` prefix guard then correctly
+    // refused to let it bleed onto `seizures`, so the run planned no deletes, no writes and no
+    // verification — and every check being skipped by its own `selected(...)` guard left
+    // `mismatches` and `comparison.diffs` structurally empty. Pre-fix this printed
+    // "OK: ... a field-by-field value compare of all 0 document(s)" and exited 0, which is the
+    // exact line migration.md §7's irreversible cleanup delete is gated on.
+    const dumpFile = await legacyDumpFile();
+
+    for (const argv of [
+      [dumpFile, PROJECT, '--only=households/h-legacy/seizure'],
+      [dumpFile, PROJECT, '--only=households/h-legacy/seizure', '--commit'],
+      // A plausible whole-household typo, and a real collection under the wrong household.
+      [dumpFile, PROJECT, '--only=household/h-legacy/seizures', '--commit'],
+      [dumpFile, PROJECT, '--only=households/h-typo/seizures', '--commit'],
+      // One good entry does not excuse a bad one: the bad half still verifies nothing.
+      [dumpFile, PROJECT, '--only=households/h-legacy/seizures,households/h-legacy/pet', '--commit'],
+    ]) {
+      const res = await H.run(restore.main, argv)
+        .then((ok) => ok, (err) => ({ code: 2, out: err.out, err }));
+      // The exit code and the absence of a success line are what matter — a refusal that still
+      // printed OK would be no better than the bug.
+      expect(res.code).not.toBe(0);
+      expect(res.out).not.toContain(OK_LINE);
+      expect(res.err).toBeDefined();
+      expect(res.err.message).toMatch(/selects nothing in this dump/);
+    }
+
+    // Refused during planning, so nothing was touched on the way to finding out.
+    expect((await db.doc('households/h-legacy/seizures/s-normal').get()).get('seizureType'))
+      .toBe('Generalized (grand mal)');
+    expect((await db.doc('codeIndex/ABC123').get()).exists).toBe(true);
+  });
+
+  test('a valid --only is still accepted, including a whole collection root', async () => {
+    // The fix must not narrow what works: an exact collection path, a parent of one, and the
+    // global codeIndex all still restore.
+    const dumpFile = await legacyDumpFile();
+    for (const only of [
+      '--only=households/h-legacy/seizures',
+      '--only=households/h-legacy/pets/p-ghost/medications',
+      '--only=households',
+      '--only=codeIndex',
+      '--only=households/h-legacy/seizures,codeIndex',
+    ]) {
+      const res = await H.run(restore.main, [dumpFile, PROJECT, only, '--commit']);
+      expect(res.code).toBe(0);
+      expect(res.out).toContain(OK_LINE);
+    }
+  });
+
+  test('the gate itself refuses to report success over an empty comparison', async () => {
+    // The general property, independent of --only validity: `mismatches.length === 0` is only
+    // evidence of a good restore if something was compared. Here the --only path IS in the dump
+    // (so checkOnlyPaths passes) but the dump's copy of that collection has been emptied by hand
+    // and its manifest entry removed, so after a real delete pass there is nothing to write, no
+    // count to check and no id to diff. Pre-fix: "OK ... all 0 document(s)", exit 0, three
+    // documents destroyed.
+    const dumpFile = await legacyDumpFile();
+    const dump = readDump(dumpFile);
+    dump.collections.households['h-legacy'].collections.seizures = {};
+    delete dump.manifest.counts['households/h-legacy/seizures'];
+    writeDump(dumpFile, dump);
+
+    const res = await H.run(restore.main, [
+      dumpFile, PROJECT, '--only=households/h-legacy/seizures', '--commit',
+    ]);
+    expect(res.code).toBe(1);
+    expect(res.out).not.toContain(OK_LINE);
+    expect(res.out).toContain('this run verified nothing');
+  });
+
+  test('a dry run that would do nothing at all is refused before it can look successful', async () => {
+    // Same property at the plan stage, stated without reference to any flag: no deletes and no
+    // writes means nothing to verify, so there is no run to report on.
+    const dumpFile = await legacyDumpFile();
+    const dump = readDump(dumpFile);
+    dump.collections.households = {};
+    dump.collections.codeIndex = {};
+    dump.scope.households = [];
+    dump.manifest.counts = {};
+    writeDump(dumpFile, dump);
+
+    await expect(H.run(restore.main, [dumpFile, PROJECT]))
+      .rejects.toThrow(/delete nothing and write nothing/);
+  });
+
+  test('the OK line distinguishes what was compared from nothing being compared', async () => {
+    const dumpFile = await legacyDumpFile();
+    const res = await H.run(restore.main, [
+      dumpFile, PROJECT, '--only=households/h-legacy/seizures', '--commit',
+    ]);
+    expect(res.code).toBe(0);
+    // Counts in the line, because §7's delete is gated on reading it and a zero in it is the only
+    // thing that separates "verified everything" from "verified nothing".
+    expect(res.out).toMatch(/all [1-9]\d* per-collection count\(s\)/);
+    expect(res.out).toMatch(/document-id set \([1-9]\d* check\(s\)\)/);
+    expect(res.out).toMatch(/value compare of all [1-9]\d* document\(s\)/);
+  });
+});
+
+// --- blocking 2: a boolean safety gate must not be openable by giving it a value ----------------
+describe('the --allow-prod and --allow-project-mismatch gates', () => {
+  async function legacyDumpFile() {
+    await H.seedLegacyHousehold(db);
+    const out = H.tmpDir();
+    await H.run(backup.main, [PROJECT, `--out=${out}`]);
+    return H.newestDump(out);
+  }
+
+  test('do not open when given "=false"', async () => {
+    // parseArgs rejected a value flag written with no value and accepted a value on a flag that
+    // takes none, so `--allow-prod=false` landed as the string 'false' — truthy — and
+    // `!flags['allow-prod']` was then false. Both gates opened for an operator who typed the word
+    // "false" while trying to be explicit. `--commit=false` was already safe because that one
+    // tests `=== true`, so the right pattern was one screen away.
+    const dumpFile = await legacyDumpFile();
+
+    for (const flag of ['--allow-prod=false', '--allow-project-mismatch=false', '--commit=false']) {
+      await expect(H.run(restore.main, [dumpFile, PROJECT, flag]))
+        .rejects.toThrow(/is a boolean flag and takes no value/);
+    }
+    // And the gate they guard is still closed: with no emulator host and no bare --allow-prod,
+    // the run is refused before any RPC.
+    const saved = process.env.FIRESTORE_EMULATOR_HOST;
+    process.env.FIRESTORE_EMULATOR_HOST = '';
+    process.env.GOOGLE_APPLICATION_CREDENTIALS = '/nonexistent/key.json';
+    try {
+      await expect(H.run(restore.main, [dumpFile, PROJECT, '--allow-prod=false', '--commit']))
+        .rejects.toThrow(/is a boolean flag and takes no value/);
+    } finally {
+      process.env.FIRESTORE_EMULATOR_HOST = saved;
+      delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    }
+  });
+
+  test('open only when the flag is written bare', async () => {
+    const dumpFile = await legacyDumpFile();
+    const dump = readDump(dumpFile);
+    dump.source.projectId = 'seizuretracker-prod';
+    writeDump(dumpFile, dump);
+    const res = await H.run(restore.main, [dumpFile, PROJECT, '--allow-project-mismatch', '--commit']);
+    expect(res.code).toBe(0);
+  });
+
+  test('backup.js rejects a value on its booleans too, and an unknown flag on either script', async () => {
+    const out = H.tmpDir();
+    await expect(H.run(backup.main, [PROJECT, `--out=${out}`, '--no-codeindex=false']))
+      .rejects.toThrow(/is a boolean flag and takes no value/);
+    await expect(H.run(backup.main, [PROJECT, `--out=${out}`, '--require-expected=0']))
+      .rejects.toThrow(/is a boolean flag and takes no value/);
+    // An unknown flag is the third route to the same hazard: a misspelled --only or --household
+    // leaves the run wider than what was typed, with nothing on screen to say so.
+    await expect(H.run(backup.main, [PROJECT, `--out=${out}`, '--housevold=h-legacy']))
+      .rejects.toThrow(/unknown flag --housevold/);
+    const dumpFile = await legacyDumpFile();
+    await expect(H.run(restore.main, [dumpFile, PROJECT, '--onyl=households/h-legacy/seizures', '--commit']))
+      .rejects.toThrow(/unknown flag --onyl/);
+    await expect(H.run(restore.main, [dumpFile, PROJECT, '--allow-prd', '--commit']))
+      .rejects.toThrow(/unknown flag --allow-prd/);
+  });
+
+  test('backup.js takes no positional arguments', async () => {
+    // `node backup.js h-legacy` — the flag name forgotten entirely — dumped every household.
+    await H.seedLegacyHousehold(db);
+    await H.seedOtherHousehold(db);
+    const out = H.tmpDir();
+    await expect(H.run(backup.main, [PROJECT, `--out=${out}`, 'h-legacy']))
+      .rejects.toThrow(/takes no positional arguments/);
+  });
+});
+
+// --- blocking 3: a dump shape the codec accepts must not fail verification after the delete -----
+describe('the two number shapes decodeValue used to accept', () => {
+  test('are refused during planning, not reported as a mismatch after the delete', async () => {
+    // `decodeValue` accepted a bare JSON number (as a double) and a numeric `@int` payload
+    // (BigInt(12) works as well as BigInt("12")); both restored CORRECTLY. But `compareEncoded`
+    // has no untagged-number case and compares @int payloads exactly, so `12.5` vs
+    // `{"@double":12.5}` and `{"@int":12}` vs `{"@int":"12"}` both reported a difference and exited
+    // 1 over correct data — after the delete and write passes had committed. The
+    // `{"@double":"12.5"}` case in the same switch was already a pre-delete refusal for exactly
+    // this reason; these are the other two halves of that guard.
+    await H.seedLegacyHousehold(db);
+    const out = H.tmpDir();
+    await H.run(backup.main, [PROJECT, `--out=${out}`, '--household=h-legacy']);
+    const dumpFile = H.newestDump(out);
+    const pristine = readDump(dumpFile);
+
+    for (const [value, pattern] of [
+      [12.5, /bare JSON number/],
+      [{ '@int': 12 }, /@int.*must be a decimal string/s],
+    ]) {
+      const dump = JSON.parse(JSON.stringify(pristine));
+      dump.collections.households['h-legacy'].collections.pets['p-dog'].data.weightKg = value;
+      writeDump(dumpFile, dump);
+
+      // Both the dry run and the --commit run refuse, and both name the document.
+      await expect(H.run(restore.main, [dumpFile, PROJECT]))
+        .rejects.toThrow(/households\/h-legacy\/pets\/p-dog: Cannot decode dump value/);
+      await expect(H.run(restore.main, [dumpFile, PROJECT])).rejects.toThrow(pattern);
+      await expect(H.run(restore.main, [dumpFile, PROJECT, '--commit'])).rejects.toThrow(pattern);
+      // Nothing was deleted on the way to discovering it.
+      expect((await db.doc('households/h-legacy/pets/p-dog').get()).get('weightKg')).toBe(28.4);
+      expect((await db.doc('households/h-legacy/seizures/s-normal').get()).exists).toBe(true);
+    }
+  });
+});
+
+// --- round-2 nits -------------------------------------------------------------------------------
+describe('round-2 nits', () => {
+  test('--household=h1,h1 dumps and counts the household once', async () => {
+    // list() did not dedupe, so the household was crawled twice and householdCount incremented
+    // twice: manifest.counts.households said 2 against a single entry in collections.households,
+    // totalDocuments was one high, and every restore from that dump then failed verification with
+    // "households: manifest says 2 doc(s), target has 1" — after committing.
+    await H.seedLegacyHousehold(db);
+    const out = H.tmpDir();
+    const res = await H.run(backup.main, [PROJECT, `--out=${out}`, '--household=h-legacy,h-legacy']);
+    expect(res.code).toBe(0);
+    const dump = readDump(H.newestDump(out));
+    expect(dump.manifest.counts.households).toBe(1);
+    expect(dump.scope.households).toEqual(['h-legacy']);
+    expect(dump.scope.requestedHouseholds).toEqual(['h-legacy']);
+
+    const restored = await H.run(restore.main, [H.newestDump(out), PROJECT, '--commit']);
+    expect(restored.code).toBe(0);
+    expect(restored.out).toContain(OK_LINE);
+  });
+
+  test('--expect is validated before the project is read, not after', async () => {
+    // `--expect=lgacy` used to cost a full crawl of the live project and then exit 2 with no dump
+    // written — a real cost on Spark and a bad thing to discover inside the migration window.
+    await H.seedLegacyHousehold(db);
+    const out = H.tmpDir();
+    await expect(H.run(backup.main, [PROJECT, `--out=${out}`, '--expect=lgacy']))
+      .rejects.toThrow(/--expect must be one of legacy\|target\|none/);
+    // Nothing was read and nothing was written: no dump file, and no target banner printed.
+    expect(H.fs.readdirSync(out)).toEqual([]);
+  });
+
+  test('--codeindex=all removes a fieldless codeIndex document that owns a subcollection', async () => {
+    // The delete planner used collection.get(), which skips a document that holds no fields but
+    // does own a subcollection — the opposite of the listDocuments() choice lib/firestore.js
+    // documents at length. Such a document survived a mode whose whole meaning is "all", and
+    // verification counts only existing documents so it could not see the survivor either.
+    await H.seedLegacyHousehold(db);
+    const out = H.tmpDir();
+    await H.run(backup.main, [PROJECT, `--out=${out}`]);
+    const dumpFile = H.newestDump(out);
+
+    // A fieldless codeIndex/QQQ777 that owns a subcollection, created after the dump.
+    await db.doc('codeIndex/QQQ777/history/h1').set({ note: 'stale' });
+    expect((await db.doc('codeIndex/QQQ777').get()).exists).toBe(false);
+
+    const res = await H.run(restore.main, [dumpFile, PROJECT, '--codeindex=all', '--commit']);
+    expect(res.code).toBe(0);
+    expect((await db.doc('codeIndex/QQQ777/history/h1').get()).exists).toBe(false);
+  });
+
+  test('the retype warning survives a period in a parent path segment', async () => {
+    // The warning filter split the field path on '.' — the very thing the gate correctly refuses
+    // to do, because Firestore document ids may contain periods. For
+    // households/h.1/pets/p1.weightKg under --only=households/h.1/pets the key came out as
+    // "households" and the warning was silently dropped.
+    await db.doc('households/h.1').set({ name: 'Dotted', members: ['u1'], createdAtMillis: 1 });
+    await db.doc('households/h.1/pets/p1').set({ name: 'Rufus' });
+    await H.setIntegralDouble('households/h.1/pets/p1', 'weightKg', 12);
+    const out = H.tmpDir();
+    await H.run(backup.main, [PROJECT, `--out=${out}`, '--household=h.1', '--expect=none']);
+    const dumpFile = H.newestDump(out);
+    expect(readDump(dumpFile).manifest.integralDoubleFields)
+      .toEqual(['households/h.1/pets/p1.weightKg']);
+
+    const res = await H.run(restore.main, [dumpFile, PROJECT, '--only=households/h.1/pets']);
+    expect(res.out).toContain('will come back as Firestore integers');
+    expect(res.out).toContain('households/h.1/pets/p1.weightKg');
+  });
+
+  test('a dump with no scope.includeCodeIndex is refused before the delete, not after', async () => {
+    // `!== false` means "in scope" downstream, so a dump missing the key read as a dump that
+    // contains codeIndex: the planner deleted every live code pointing into scope with nothing to
+    // write back. The count check did catch it — after the delete had committed.
+    await H.seedLegacyHousehold(db);
+    const out = H.tmpDir();
+    await H.run(backup.main, [PROJECT, `--out=${out}`]);
+    const dumpFile = H.newestDump(out);
+    const dump = readDump(dumpFile);
+    delete dump.scope.includeCodeIndex;
+    writeDump(dumpFile, dump);
+
+    await expect(H.run(restore.main, [dumpFile, PROJECT, '--commit']))
+      .rejects.toThrow(/no boolean scope\.includeCodeIndex/);
+    expect((await db.doc('codeIndex/ABC123').get()).get('householdId')).toBe('h-legacy');
+  });
+
+  test('a dropped fieldless codeIndex doc does not push the manifest count below the truth', async () => {
+    // report.counts.codeIndex -= dropped decremented for every dropped node including exists:false
+    // ones, which crawlCollection never counted into `existing` — so the manifest went low and
+    // every restore from that dump failed verification.
+    await H.seedLegacyHousehold(db);
+    await db.doc('codeIndex/QQQ777/history/h1').set({ note: 'owned by nobody' });
+    const out = H.tmpDir();
+    const res = await H.run(backup.main, [PROJECT, `--out=${out}`, '--household=h-legacy']);
+    expect(res.code).toBe(0);
+    const dump = readDump(H.newestDump(out));
+    expect(dump.manifest.counts.codeIndex).toBe(1); // ABC123 only, and not 0
+    expect(Object.keys(dump.collections.codeIndex)).toEqual(['ABC123']);
+  });
+});
