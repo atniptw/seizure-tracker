@@ -110,5 +110,20 @@ of what must change. The merge-gate hook (`check-review-verdict.sh`) parses the 
 requires the file to be newer than the commit being pushed — a stale or missing verdict hard-blocks
 the push.
 
+**If a mandated pass has not returned, the verdict is `CHANGES` pending it — never `PASS` with a
+caveat.** `/code-review` forks to a background agent and can take far longer than it seems it
+should. On issue #5 a reviewer waited through two yield windows, got no reply to a direct message,
+and published `PASS` with an honest Process note saying the pass had not reported and every finding
+was its own. The pass then returned with nine findings, **three of which the reviewer had missed** —
+including two safety gates that failed open on `--allow-prod=false`. The disclaimer was accurate and
+it did not matter: this file has exactly two readers and one of them is a shell script that reads a
+single line, so for those 18 minutes a push touching the reviewed paths would have been let through
+on a review that was still running. `CHANGES` pending a late pass blocks nothing permanently, costs
+one cycle, and cannot fail open. Fail closed and wait.
+
+Related, from the same review: do not treat a clean manual pass as evidence that one reading is
+enough. On that diff `/code-review` found three real defects to the reviewer's zero-new. On a change
+of any size the two passes are not redundant.
+
 You never spawn subagents and never edit source or tests. **Return** a short summary: the verdict
 and the top findings.
