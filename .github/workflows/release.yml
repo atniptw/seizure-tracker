@@ -18,11 +18,10 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      # v4 accepts the SDK licences itself and installs only platform-tools by default; v3 asked
+      # for the `tools` package Google stopped serving on 2026-09-15 and broke every run.
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Accept Android SDK licenses
-        run: yes | sdkmanager --licenses > /dev/null || true
+        uses: android-actions/setup-android@v4
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
