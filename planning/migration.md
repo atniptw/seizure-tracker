@@ -96,8 +96,14 @@ writes** — that part stands and is the part that matters. But the access was t
   produce.
 - **Firebase Auth** — `getUser` on four uids (the live household's three, plus the junk
   households' owner). The records came back **in full**, including email, display name and photo
-  URL; only the provider type and the created/last-refresh timestamps were carried into this
-  document, deliberately, since it is committed to the repo.
+  URL; only the provider type and *date-level* created/last-refresh timestamps were carried into
+  this document, deliberately, since it is committed to a public repo. The exact account-creation
+  times are live metadata about two real people's accounts, so they appear here only as
+  `<CREATED-AT-1>`…`<CREATED-AT-4>` — same convention as every other identifier in this section
+  (`<PROJECT-ID>`, `<LIVE-HOUSEHOLD-ID>`, `<UID-ANON>`, …). The values, and the placeholder they
+  map to, live in `.claude/local/live-inventory.md`, which is gitignored. Where the reasoning
+  below needs a time it uses the **relative offset** between two of them, which is stated in prose
+  and costs nothing analytically.
 
 **What was *not* read**, so this section is usable as evidence in both directions: no document
 under `seizures`, `healthNotes`, `vets`, `petVetLinks` or `members` was retrieved — those are
@@ -152,9 +158,9 @@ in this doc):
 
 | uid | Provider | Auth account created | Last refresh |
 |---|---|---|---|
-| `<UID-GOOGLE-1>` | **Google** | <CREATED-AT> — 18s before the household doc | within the last week |
-| `<UID-ANON>` | **anonymous** — no provider record, no email, no display name | <CREATED-AT> — 35 min after the above | 2026-08-17 |
-| `<UID-GOOGLE-2>` | **Google** | <CREATED-AT> | within the last week |
+| `<UID-GOOGLE-1>` | **Google** | `<CREATED-AT-1>` (08-02) — 18s before the household doc | within the last week |
+| `<UID-ANON>` | **anonymous** — no provider record, no email, no display name | `<CREATED-AT-2>` (08-02) — 35 min after the above | 2026-08-17 |
+| `<UID-GOOGLE-2>` | **Google** | `<CREATED-AT-3>` (08-17) | within the last week |
 
 **`--admins` is the two Google uids** (`<UID-GOOGLE-1>`, `<UID-GOOGLE-2>`) — the two people, both
 with durable identities. **The anonymous member gets no role, deliberately.**
@@ -181,8 +187,8 @@ refresh being 2026-08-17 is suggestive, not proof.
 
 **(2) Two of the three households are test junk — open: leave them, or delete them later.**
 `<HOUSEHOLD-2-ID>` and `<HOUSEHOLD-3-ID>` both carry a creation timestamp of 08-16 and both have exactly one uid in
-their `members` array, the same one in each: `<UID-ANON-2>` (**anonymous**, Auth
-account created <CREATED-AT>). **"Created by" is inference, not evidence** — Firestore
+their `members` array, the same one in each: `<UID-ANON-2>` — **anonymous**, Auth account created
+`<CREATED-AT-4>`, the same day (08-16). **"Created by" is inference, not evidence** — Firestore
 records no creator; the reading is that the sole member of a one-member household is whoever
 created it, which is how the app's create flow works. That uid
 appears in none of the live household's three — a second, different anonymous identity from the
