@@ -45,6 +45,19 @@ match, `cd` to the briefed path; if the brief names no path, stop and ask for on
    `dart run custom_lint` must be clean.
 4. Check the change against the brief's acceptance criteria **and** the relevant planning doc —
    flag any drift from documented design.
+5. **Ask what the diff publishes that cannot be unpublished.** Every other step here is about
+   whether the change is *correct*; none asks whether it is safe to *put in a public repo*, and
+   on issue #5 that gap let the real Firebase project id, the live household's document id and
+   four Auth uids reach the public remote — three review rounds read that inventory as evidence
+   and never asked whether it belonged in git at all. Read every added line under `planning/`,
+   docs, READMEs, test fixtures and commit messages for: project ids, household / pet / document
+   ids, Auth uids, join codes, emails, API keys, tokens, service-account material, and any real
+   name or address. Do not stop at what the guard hook (`scan-outgoing-ids.sh`) would catch —
+   it knows the values on Tom's local denylist and a couple of shapes, not everything. A hit is
+   `[blocking]` regardless of severity elsewhere: it is irreversible once pushed, and if the
+   branch is already on the remote say so, because then the remedy is a history rewrite, not a
+   fix commit. **Never quote the value in your verdict, the issue comment, or your report** — the
+   issue tracker is on the same public repo; redact to a placeholder and a character count.
 
 **Focus on:** correctness; the `CLAUDE.md` gotchas (ViewModel keys, rules-not-evaluated-on-cache,
 the data-flow pattern); missing test coverage; and anything expensive to reverse once shipped.

@@ -37,3 +37,9 @@ ui-debug.log
 .claude/team/last-green
 .claude/team/log/*
 !.claude/team/log/.gitkeep
+
+# Live identifiers (project id, household/pet doc ids, Auth uids) — local only. Anything in a
+# public repo's history is permanent; see planning/claude-dev-team.md "Nothing live goes in git".
+.claude/local/
+# Git worktrees the team creates per issue — each is its own checkout, never part of this one.
+.claude/worktrees/

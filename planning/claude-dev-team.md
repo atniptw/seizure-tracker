@@ -158,6 +158,47 @@ Tom's authority.
 
 `review-verdict.md` format is in `.claude/team/README.md`.
 
+### Nothing live goes in git (the outbound-content guard)
+
+The merge gate above answers "is this *correct* enough for main". It says nothing about "is this
+safe to *publish*", and the two come apart: the gate only looks at pushes updating `main`, while
+the repo is public and every branch on it is readable by anyone. On issue #5 a `migration.md`
+rewrite carried the real Firebase project id, the live household's document id and four Auth
+uids onto a topic branch; the branch was pushed, reviewed three times as a correctness question,
+and sat on the public remote for six days. It could not be un-published — only scrubbed from the
+branch, with the old commits still fetchable by SHA until GitHub purges them.
+
+It matters more here than it would elsewhere: `firestore.rules` lets any signed-in user add
+*themselves* to a household's `members`, so the household document id is effectively the key.
+
+**The rule:** real project ids, household/pet document ids, Auth uids, join codes, emails, API
+keys and service-account material never appear in a committed file, a commit message, an issue
+comment or a review verdict. Use the placeholders (`<LIVE-HOUSEHOLD-ID>`, `<UID-ANON>`, …); the
+real values live in `.claude/local/` (gitignored — `live-inventory.md` maps each placeholder to
+its value, `denylist.txt` is what the guard matches). Truncating to "the first six characters" is
+*not* a scrub: it is still a partial identifier and it is what the old doc used.
+
+**Enforcement** — `.claude/hooks/scan-outgoing-ids.sh`, one scanner, two entry points:
+- a `PreToolUse` hook on every Bash `git push` (registered without an `if:` on purpose: the
+  script matches `git -C <dir> push` and compound commands itself), and
+- a git `pre-push` hook, `.githooks/pre-push`, so Tom's terminal and any non-Claude tool are
+  covered too. It is opt-in per clone: `git config core.hooksPath <main-checkout>/.githooks`
+  (`session-brief.sh` warns when it is off).
+
+It scans every line the push would *add* — contents and commit messages — for any denylist
+literal, API keys, PEM/service-account material, and, in `*.md` only, a bare 20- or 28-char
+mixed-case token (the shape of a Firestore id or an Auth uid; not applied to lockfiles, where
+integrity hashes look the same). Findings are printed redacted. Only commits not already on a
+remote are scanned. A false positive is marked `id-scan:ignore` on the line. It is unlike the
+merge gate in one respect: it applies to **every** ref, not just `main`, and docs are not exempt.
+Its tests are in `.claude/hooks/test-gates.sh`.
+
+**The reviewer's part** is a standing step (see `reviewer.md`): every diff under `planning/`,
+`README`/docs and test fixtures is read for the question the correctness passes never ask — *does
+this publish something that cannot be unpublished?* — and the answer is a `[blocking]` finding
+even when the code is fine. **The Tech Lead's part:** the check has to run before a branch's
+*first* push, not before its merge; brief `flutter-dev`/`migration-lead` accordingly.
+
 ---
 
 ## 5. Backlog — GitHub Issues

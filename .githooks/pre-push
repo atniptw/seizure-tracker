@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# git pre-push hook — hands off to the outbound-content guard in the main checkout.
+# Resolves via --git-common-dir so it works from any worktree, including one whose branch
+# predates this file. Enable once per clone:  git config core.hooksPath <main-checkout>/.githooks
+common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || exit 0
+guard="$(dirname "$common")/.claude/hooks/scan-outgoing-ids.sh"
+[ -x "$guard" ] || { echo "pre-push: outbound-content guard not found at $guard — push NOT scanned" >&2; exit 0; }
+exec "$guard" "$@"

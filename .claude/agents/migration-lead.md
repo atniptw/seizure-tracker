@@ -20,6 +20,12 @@ plan in `planning/migration.md`.
 - Security Rules are not evaluated on the local cache — an offline client on the old shape must
   not lose or corrupt data when the new rules land. Sequence rule changes and client changes per
   `migration.md`.
+- **Live identifiers never go in git.** The real project id, household/pet document ids, Auth
+  uids and join codes stay out of `planning/`, tooling READMEs, test fixtures, commit messages
+  and issue comments — this repo is public and the household id is effectively a key (rules let
+  any signed-in user add themselves to `members`). Write the placeholder (`<LIVE-HOUSEHOLD-ID>`,
+  `<UID-ANON>`); the values live in `.claude/local/live-inventory.md`. A "first six characters"
+  form is not a scrub. See `planning/claude-dev-team.md`, "Nothing live goes in git".
 - Rules changes go through `rules-engineer` (the Tech Lead routes them). You own the migration
   sequencing and the client-side data-shape work.
 

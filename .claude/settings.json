@@ -49,6 +49,12 @@
           },
           {
             "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/scan-outgoing-ids.sh",
+            "timeout": 30,
+            "statusMessage": "Outbound guard: scanning what this push would publish..."
+          },
+          {
+            "type": "command",
             "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/check-review-verdict.sh",
             "if": "Bash(git push*)",
             "timeout": 15,

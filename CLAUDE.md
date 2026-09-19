@@ -187,7 +187,7 @@ Phase 2 adds `platform-parity` and `release-manager`.
 
 The flow, the label/milestone taxonomy and the rationale for all of it live in
 `planning/claude-dev-team.md` — read it rather than a summary here, which is how this section
-drifted from it before. Four things are non-negotiable and belong in front of you always:
+drifted from it before. Five things are non-negotiable and belong in front of you always:
 
 1. **Hub-and-spoke.** Subagents cannot talk to each other, and never spawn each other (enforced:
    `disallowedTools: Agent` on all six). Every handoff is an artifact the Tech Lead passes along —
@@ -202,6 +202,13 @@ drifted from it before. Four things are non-negotiable and belong in front of yo
    which checkout they used. A subagent starts in *your* cwd, not the worktree; on issue #4 that
    silently sent a mandated review at the wrong commit.
 4. **A rules diff always goes to Tom before it is pushed.**
+5. **Nothing live goes in git.** The repo is public and every branch on it is readable. Real
+   project ids, household/pet document ids, Auth uids, join codes, emails and keys never appear in
+   a committed file, commit message, issue comment or verdict — use placeholders
+   (`<LIVE-HOUSEHOLD-ID>`, `<UID-ANON>`); the values live in `.claude/local/` (gitignored). Enforced
+   on *every* push, not just to `main`, by `.claude/hooks/scan-outgoing-ids.sh` and a git
+   pre-push hook (`git config core.hooksPath <main-checkout>/.githooks`). This was learned the hard
+   way on issue #5; see `planning/claude-dev-team.md`.
 
 **Commands.** `/standup`, `/plan-feature <desc>`, `/review`, `/groom`, `/retro`, `/ship` (Phase 2).
 `/standup` is the daily state snapshot; `/retro` is periodic and looks backwards — what shipped,

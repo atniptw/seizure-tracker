@@ -49,6 +49,14 @@ done <<EOF
 $(git worktree list --porcelain 2>/dev/null | awk '/^worktree /{print $2}')
 EOF
 
+# Outbound-content guard: the Claude hook is in settings.json, but the git pre-push half is
+# opt-in per clone, and the literal denylist is local-only — neither travels with a clone.
+case "$(git config core.hooksPath 2>/dev/null || echo "")" in
+  *.githooks) ;;
+  *) add "git pre-push guard is not enabled in this clone (Tom's terminal and non-Claude tools push unscanned) — run: git config core.hooksPath \"\$(git rev-parse --show-toplevel)/.githooks\"" ;;
+esac
+[ -f .claude/local/denylist.txt ] || add ".claude/local/denylist.txt is missing — the outbound guard has only its generic patterns, not the real project/household/uid values (see planning/claude-dev-team.md, 'Nothing live goes in git')."
+
 [ -n "$notes" ] || exit 0
 
 printf '%s' "$notes" | jq -Rs '{hookSpecificOutput: {hookEventName: "SessionStart", additionalContext: ("Team state needing attention (advisory — from .claude/hooks/session-brief.sh; run /standup for the full picture):\n" + .)}}'
