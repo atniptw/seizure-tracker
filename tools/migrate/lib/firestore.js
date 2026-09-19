@@ -85,6 +85,62 @@ function adcFilePath() {
 }
 
 /**
+ * Read a credential file and report what it is. Both accepted sources are JSON with a `type`:
+ * `service_account` for a downloaded key, `authorized_user` for gcloud user credentials.
+ *
+ * `projectId` is returned **only** for a service-account key, which is the one kind that names
+ * the project it belongs to. An `authorized_user` file may carry a `quota_project_id`; that is a
+ * billing target, not the database to operate on, and this tool will not infer one from it.
+ *
+ * A file that cannot be read or parsed is fatal here rather than later: the whole point of
+ * resolving credentials up front is that the failure lands before any RPC, with the path in it.
+ */
+function readCredentialFile(credPath) {
+  let raw;
+  try {
+    raw = fs.readFileSync(credPath, 'utf8');
+  } catch (err) {
+    throw new Error(
+      `Could not read the credential file at ${credPath}: ${err.message}\n` +
+        'Fix the path it is named by, or unset it and pick another source (README.md).'
+    );
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    throw new Error(
+      `The credential file at ${credPath} is not valid JSON: ${err.message}\n` +
+        'A service-account key and a gcloud ADC file are both JSON. Re-download the key, or re-run\n' +
+        '`gcloud auth application-default login`.'
+    );
+  }
+
+  const obj = parsed && typeof parsed === 'object' ? parsed : {};
+  const type = typeof obj.type === 'string' && obj.type ? obj.type : null;
+  const declared = typeof obj.project_id === 'string' && obj.project_id ? obj.project_id : null;
+  return { type, projectId: type === 'service_account' ? declared : null };
+}
+
+/**
+ * The one refusal for "a credential with no project id and none supplied", shared by both file
+ * routes. Pointing GOOGLE_APPLICATION_CREDENTIALS at an `authorized_user` file has to land here
+ * and not in the key-file branch: it is user credentials wherever it was named from, so it needs
+ * the same explicit project id that gcloud ADC does.
+ */
+function noProjectIdError(credPath, type) {
+  const what = type ? `a credential file of type "${type}"` : 'a credential file with no "type"';
+  return new Error(
+    `Found ${what} (${credPath}) but no project id.\n` +
+      'ADC carries no project id, and neither does any other user-credentials file — only a\n' +
+      'service-account key names its own project. Without one the Admin SDK would fail later and\n' +
+      'unhelpfully ("Client is not yet ready to issue requests").\n' +
+      'Pass --project=<id> or set GOOGLE_CLOUD_PROJECT.'
+  );
+}
+
+/**
  * Which credential the Admin SDK is going to use — decided up front so a missing one fails here,
  * with a message naming every option, rather than inside the SDK on the first RPC.
  *
@@ -96,10 +152,15 @@ function adcFilePath() {
  * - gcloud ADC (`gcloud auth application-default login`) — user credentials at the well-known
  *   path, revocable with one command and with no key file to leak. Preferred for the rehearsal.
  *
- * The ADC path additionally requires an explicit project id: unlike a key file, ADC carries no
- * `project_id`, so without one the SDK fails later and confusingly.
+ * A project id is required unless the credential file itself carries one. Only a service-account
+ * key does: ADC — and any other `authorized_user` file, including one an operator has pointed
+ * `GOOGLE_APPLICATION_CREDENTIALS` at — carries none, and without one the SDK fails later and
+ * confusingly ("Client is not yet ready to issue requests"). So the decision is made on the
+ * file's contents, not on which environment variable named it.
  *
- * Returns `{ kind: 'emulator' | 'key-file' | 'adc', path? }`.
+ * Returns `{ kind: 'emulator' | 'key-file' | 'adc', path?, projectId? }`, where `projectId` is the
+ * one read out of a service-account key — the reason initFirestore never has to fall back to the
+ * SDK's `@private` `db.projectId`.
  */
 function resolveCredentialSource({ emulatorHost, projectId }) {
   if (emulatorHost) {
@@ -110,19 +171,17 @@ function resolveCredentialSource({ emulatorHost, projectId }) {
   }
 
   if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    return { kind: 'key-file', path: process.env.GOOGLE_APPLICATION_CREDENTIALS };
+    const keyPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    const file = readCredentialFile(keyPath);
+    if (!file.projectId && !projectId) throw noProjectIdError(keyPath, file.type);
+    return { kind: 'key-file', path: keyPath, type: file.type, projectId: file.projectId || undefined };
   }
 
   const adc = adcFilePath();
   if (fs.existsSync(adc)) {
-    if (!projectId) {
-      throw new Error(
-        `Found Application Default Credentials (${adc}) but no project id.\n` +
-          'ADC carries no project id (a service-account key does), so the Admin SDK would fail\n' +
-          'later and unhelpfully. Pass --project=<id> or set GOOGLE_CLOUD_PROJECT.'
-      );
-    }
-    return { kind: 'adc', path: adc };
+    const file = readCredentialFile(adc);
+    if (!file.projectId && !projectId) throw noProjectIdError(adc, file.type);
+    return { kind: 'adc', path: adc, type: file.type, projectId: file.projectId || undefined };
   }
 
   throw new Error(
@@ -172,12 +231,16 @@ function initFirestore({ project }) {
     project || process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || undefined;
 
   const credential = resolveCredentialSource({ emulatorHost, projectId });
+  // `credential.projectId` is the one read out of a service-account key. Between the explicit
+  // flag/env and that, every branch of resolveCredentialSource has already guaranteed a project id
+  // by this point — which is why nothing below falls back to the SDK's `@private` db.projectId.
+  const resolvedProjectId = projectId || credential.projectId;
 
   if (!admin.apps.length) {
     admin.initializeApp(
       emulatorHost
-        ? { projectId }
-        : { credential: admin.credential.applicationDefault(), projectId }
+        ? { projectId: resolvedProjectId }
+        : { credential: admin.credential.applicationDefault(), projectId: resolvedProjectId }
     );
   }
   const db = getFirestore();
@@ -192,7 +255,7 @@ function initFirestore({ project }) {
     assertUseBigInt(db, err);
   }
 
-  return { db, emulatorHost, projectId: projectId || db.projectId, credential };
+  return { db, emulatorHost, projectId: resolvedProjectId, credential };
 }
 
 /**

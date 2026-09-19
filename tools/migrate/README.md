@@ -108,7 +108,11 @@ GOOGLE_APPLICATION_CREDENTIALS=~/.config/seizuretracker/prod-service-account.jso
 ```
 
 `GOOGLE_APPLICATION_CREDENTIALS` wins over ADC when both are present (that is the Admin SDK's own
-precedence, and the scripts report which one they used).
+precedence, and the scripts report which one they used). What the scripts check is the *file*, not
+the variable: `GOOGLE_APPLICATION_CREDENTIALS` accepts any ADC file, so if you point it at gcloud
+user credentials (`"type": "authorized_user"`) rather than a downloaded key, it carries no
+`project_id` and `--project` becomes required — the scripts say so up front instead of letting the
+SDK fail at the first RPC with "Client is not yet ready to issue requests".
 
 Least privilege, if you want it: instead of the default Firebase Admin SDK account (which is
 broad), create a dedicated service account in the Google Cloud console with only

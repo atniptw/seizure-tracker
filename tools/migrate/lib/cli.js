@@ -131,11 +131,21 @@ const HEALTH_DATA_WARNING = [
   'location, and delete it once the migration.md §7 cleanup has verified.',
 ].join('\n');
 
-/** One-line description of the credential initFirestore resolved, for the target banner. */
+/**
+ * One-line description of the credential initFirestore resolved, for the target banner.
+ *
+ * `kind: 'key-file'` means "the file GOOGLE_APPLICATION_CREDENTIALS named", which is not always a
+ * service-account key — an operator can point it at gcloud user credentials. Say what the file
+ * actually is, so the banner is not the thing that tells the operator the wrong story.
+ */
 function describeCredential(credential) {
   if (!credential) return 'unknown';
   if (credential.kind === 'emulator') return 'none (emulator)';
   if (credential.kind === 'adc') return `gcloud ADC (${credential.path})`;
+  if (credential.type === 'authorized_user') return `user credentials (${credential.path})`;
+  if (credential.type && credential.type !== 'service_account') {
+    return `"${credential.type}" credential file (${credential.path})`;
+  }
   return `service-account key (${credential.path})`;
 }
 
