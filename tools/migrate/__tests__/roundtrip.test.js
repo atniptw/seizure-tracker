@@ -6,6 +6,9 @@
 //
 // Run: firebase emulators:exec --project demo-seizuretracker-rules-test --only firestore "npm test"
 
+const fs = require('fs');
+const path = require('path');
+
 const H = require('./helpers');
 const { PROJECT_ID } = H;
 const backup = require('../backup');
@@ -281,9 +284,22 @@ describe('restore.js', () => {
     await H.run(backup.main, [PROJECT, `--out=${out}`]);
     const dumpFile = H.newestDump(out);
 
+    // A real (fake-contents) key file, not a path that does not exist: resolveCredentialSource now
+    // reads the file to decide whether it names its own project, so a bogus path fails there
+    // instead of reaching the gate this test is about. The gate is what is under test, so give it
+    // a credential that resolves.
+    const keyFile = path.join(H.tmpDir(), 'fake-service-account.json');
+    fs.writeFileSync(keyFile, JSON.stringify({
+      type: 'service_account',
+      project_id: PROJECT_ID,
+      private_key_id: 'not-a-real-key-id',
+      private_key: '-----BEGIN PRIVATE KEY-----\nNOT-A-REAL-KEY\n-----END PRIVATE KEY-----\n',  // id-scan:ignore — fake fixture, not a key
+      client_email: `not-a-real-account@${PROJECT_ID}.iam.gserviceaccount.com`,
+    }), { mode: 0o600 });
+
     const saved = process.env.FIRESTORE_EMULATOR_HOST;
     process.env.FIRESTORE_EMULATOR_HOST = '';
-    process.env.GOOGLE_APPLICATION_CREDENTIALS = '/nonexistent/key.json';
+    process.env.GOOGLE_APPLICATION_CREDENTIALS = keyFile;
     try {
       await expect(H.run(restore.main, [dumpFile, PROJECT, '--commit']))
         .rejects.toThrow(/--allow-prod/);

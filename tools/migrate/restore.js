@@ -496,16 +496,28 @@ async function main(argv) {
   const gotDocs = new Map();
   for (const [id, node] of Object.entries(actualHouseholds)) collectDocs(node, `households/${id}`, gotDocs);
   for (const [id, node] of Object.entries(actualCodeIndex)) collectDocs(node, `codeIndex/${id}`, gotDocs);
-  const wantPaths = new Set(writeJobs.map((j) => j.path));
-  let idChecks = 0;
+  // `writtenDocPaths` is the same set, already built above for the retype filter.
+  const wantPaths = writtenDocPaths;
+
+  // The check is one comparison of two sets, so count the union of the in-scope paths once. It
+  // used to be incremented inside each direction of the diff, which made a clean restore of N
+  // documents — where the two sets are equal, so every path is walked twice — print `2N` id
+  // checks beside `contentChecks = N` and a dry run that planned N. That is the one line
+  // migration.md §7's irreversible cleanup delete is gated on, and README.md tells the operator to
+  // read its numbers against the dry run's, so the number that did not match was in the one place
+  // built to be compared. The empty-comparison guard below is unaffected: the union is empty
+  // exactly when both directions were.
+  const idCheckPaths = new Set();
+  for (const p of wantPaths) if (selected(collectionOf(p), only)) idCheckPaths.add(p);
+  for (const p of gotDocs.keys()) if (selected(collectionOf(p), only)) idCheckPaths.add(p);
+  const idChecks = idCheckPaths.size;
+
   for (const p of wantPaths) {
     if (!selected(collectionOf(p), only)) continue;
-    idChecks += 1;
     if (!gotDocs.has(p)) mismatches.push(`missing from target: ${p}`);
   }
   for (const p of gotDocs.keys()) {
     if (!selected(collectionOf(p), only)) continue;
-    idChecks += 1;
     if (!wantPaths.has(p)) mismatches.push(`unexpected in target: ${p}`);
   }
 
@@ -569,7 +581,7 @@ async function main(argv) {
   // read differently at a glance, because migration.md §7's irreversible cleanup delete is gated on
   // this one line and a zero in it is the only thing distinguishing the two.
   log(`\nOK: every restored collection matches the dump manifest — all ${countChecks} ` +
-      `per-collection count(s), the document-id set (${idChecks} check(s)), and a field-by-field ` +
+      `per-collection count(s), the document-id set (all ${idChecks} id(s)), and a field-by-field ` +
       `value compare of all ${contentChecks} document(s).`);
   if (comparison.retyped.length) {
     log(`    (${comparison.retyped.length} integral double(s) came back as Firestore integers — ` +

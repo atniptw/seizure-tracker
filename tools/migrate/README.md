@@ -325,9 +325,10 @@ node restore.js dumps/<the-window-dump>.json --project=<prod-project-id> --allow
 # ---- 3. Commit. Same command plus --commit. IRREVERSIBLE. ----
 node restore.js dumps/<the-window-dump>.json --project=<prod-project-id> --allow-prod --commit
 # -> must end with "OK: every restored collection matches the dump manifest — all C
-#    per-collection count(s), the document-id set (I check(s)), and a field-by-field value compare
+#    per-collection count(s), the document-id set (all I id(s)), and a field-by-field value compare
 #    of all N document(s)." Read the numbers, not just the word OK: N is how many documents were
-#    compared field by field, and it should be the count the dry run planned.
+#    compared field by field, and it should be the count the dry run planned. On a clean restore
+#    I == N — every document written is a document found.
 ```
 
 Then redeploy the previous `firestore.rules` and the previous app build. If step 3 prints
@@ -402,9 +403,9 @@ unset GOOGLE_APPLICATION_CREDENTIALS        # if you used the key-file path. ADC
 export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
 node restore.js "$PROD_DUMP" --project=$EMU --allow-project-mismatch --commit
 # -> must end: "OK: every restored collection matches the dump manifest — all C per-collection
-#    count(s), the document-id set (I check(s)), and a field-by-field value compare of all N
+#    count(s), the document-id set (all I id(s)), and a field-by-field value compare of all N
 #    document(s)." The numbers carry the signal: N is how many documents were compared field by
-#    field, and it must match what the dry run planned.
+#    field, and it must match what the dry run planned. I == N on a clean restore.
 
 # ---- 4. Prove it from a clean slate too — this is the step that matters ----
 curl -X DELETE "http://127.0.0.1:8080/emulator/v1/projects/$EMU/databases/(default)/documents"

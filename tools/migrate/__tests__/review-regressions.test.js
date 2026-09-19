@@ -565,8 +565,44 @@ describe('an --only that selects nothing in the dump', () => {
     // Counts in the line, because §7's delete is gated on reading it and a zero in it is the only
     // thing that separates "verified everything" from "verified nothing".
     expect(res.out).toMatch(/all [1-9]\d* per-collection count\(s\)/);
-    expect(res.out).toMatch(/document-id set \([1-9]\d* check\(s\)\)/);
+    expect(res.out).toMatch(/document-id set \(all [1-9]\d* id\(s\)\)/);
     expect(res.out).toMatch(/value compare of all [1-9]\d* document\(s\)/);
+  });
+
+  test('the OK line counts each document id once, not once per direction of the set diff', async () => {
+    // round-5 should-fix 2. The id check is one comparison of two sets, and a clean restore makes
+    // those sets equal — so walking the diff in both directions visits every path twice. Counting
+    // each visit printed `2N` id checks beside a field compare of N documents and a dry run that
+    // planned N. README.md:400-403 tells the operator to read these numbers against the dry run's,
+    // and migration.md §7 gates its irreversible cleanup delete on this one line, so the single
+    // number that would not match was the one in the place built for comparing.
+    const dumpFile = await legacyDumpFile();
+    const res = await H.run(restore.main, [dumpFile, PROJECT, '--commit']);
+    expect(res.code).toBe(0);
+
+    const ids = /document-id set \(all (\d+) id\(s\)\)/.exec(res.out);
+    const docs = /value compare of all (\d+) document\(s\)/.exec(res.out);
+    expect(ids).not.toBeNull();
+    expect(docs).not.toBeNull();
+    expect(Number(docs[1])).toBeGreaterThan(0);
+    // The restore reproduced the dump exactly — so every document written is a document found,
+    // and the two numbers describe the same set.
+    expect(Number(ids[1])).toBe(Number(docs[1]));
+  });
+
+  test('a scoped restore counts only the ids in scope, still once each', async () => {
+    // Same invariant with --only narrowing both sides, so a fix that merely halved the total
+    // would not satisfy it.
+    const dumpFile = await legacyDumpFile();
+    const res = await H.run(restore.main, [
+      dumpFile, PROJECT, '--only=households/h-legacy/seizures', '--commit',
+    ]);
+    expect(res.code).toBe(0);
+    const ids = /document-id set \(all (\d+) id\(s\)\)/.exec(res.out);
+    const docs = /value compare of all (\d+) document\(s\)/.exec(res.out);
+    expect(ids).not.toBeNull();
+    expect(docs).not.toBeNull();
+    expect(Number(ids[1])).toBe(Number(docs[1]));
   });
 });
 
