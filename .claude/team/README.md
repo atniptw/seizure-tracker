@@ -9,7 +9,7 @@ directory holds the ones that aren't a git branch or a GitHub issue.
 | `log/<date>.md` | `subagent-log.sh` (SubagentStop hook) | humans, `/standup` | gitignored — local journal |
 | `review-verdict.md` | `reviewer` persona | `check-review-verdict.sh` merge-gate hook | gitignored (ephemeral) |
 | `last-green` | `qa` persona | `check-green-marker.sh` merge-gate hook | gitignored (ephemeral) |
-| `retro/<date>.md` | `/retro` | humans, the next `/retro` | **committed** — process history |
+| `retro/<date>.md` | `/retro` | humans, the next `/retro` | gitignored — local process history |
 
 Plus one artifact that isn't a file here at all: the **durable copy of each verdict**, posted by
 `reviewer` as a comment on the issue it reviewed (`gh issue comment`).
@@ -28,9 +28,11 @@ surface. Keeping ~10KB of review prose per change in the source tree would also 
 findings cite `file:line` against a diff that moves on — and it is the same argument that took the
 subagent journal out of git. `/retro` reads them back with `gh issue view <n> --comments`.
 
-`retro/<date>.md` *is* committed, and the distinction is deliberate: a retro is about how the team
-works rather than about one diff, so it has no issue to hang off, it does not go stale the way a
-line-cited review finding does, and its whole value is that the next retro can find it.
+`retro/<date>.md` is local-only, like the journal. A retro is about how the team works rather than
+about one diff, so it has no issue to hang off and does not go stale the way a line-cited finding
+does — but its findings routinely cite commit SHAs, comment ids and other specifics about live
+data, and on a public repo that is a pointer to it. The next `/retro` reads the previous one from the working
+copy, so a fresh clone starts a new series; keep the directory if you want the history.
 
 ## Merge gate
 

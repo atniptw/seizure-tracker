@@ -111,9 +111,10 @@ work.
 
 `/standup` reports the current state; `/retro` looks back over a period and changes how the team
 works. It reads the verdicts (posted by `reviewer` as comments on the issues they reviewed), the
-CI history, closed issues and the journal, and writes `.claude/team/retro/<date>.md` — committed,
-because a retro's actions are checked by the *next* retro and have to outlive the session that
-wrote them. Verdicts deliberately do *not* live in the repo: they are per-diff review prose that
+CI history, closed issues and the journal, and writes `.claude/team/retro/<date>.md` — local and
+gitignored, because a retro's findings cite commit SHAs, comment ids and other specifics about live
+data and on a public repo that is a pointer to it; it still outlives the session, since the *next* retro checks
+its actions from the working copy. Verdicts deliberately do *not* live in the repo: they are per-diff review prose that
 goes stale, and the issue is the review surface this repo gives up by not using PRs.
 
 Two rules keep it from becoming a diary. It opens by going through the previous retro's actions

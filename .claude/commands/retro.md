@@ -6,7 +6,7 @@ argument-hint: [period, e.g. "since v0.0.1" or "last 2 weeks" — defaults to si
 Run a retrospective for the SeizureTracker team.
 
 `/standup` asks *what is happening now*. This asks *what actually happened, and what should change
-about how we work*. Output is a written retro at `.claude/team/retro/<date>.md`, committed, plus a
+about how we work*. Output is a written retro at `.claude/team/retro/<date>.md` (local only — gitignored), plus a
 short spoken summary.
 
 **Period:** $ARGUMENTS. If empty, use the date of the most recent file in `.claude/team/retro/`
@@ -129,7 +129,9 @@ Rules for the write-up:
 
 ## 4. Afterwards
 
-- Commit the retro (`.claude/team/retro/` is tracked — these accumulate on purpose).
+- Do **not** commit or push the retro: `.claude/team/retro/` is gitignored on purpose, because a retro
+  cites commit SHAs, comment ids and other specifics about live data and this repo is public. If the Stop hook then
+  flags unpushed commits, there should be none — a retro leaves no commit.
 - If the retro found dropped follow-ups that should be issues, **list them and offer**; don't file
   them here. Filing is `backlog-owner`'s job via `/groom`, and it needs Tom's go.
 - If an action changes a persona, hook or command, say so — that's a real change to make, not a
