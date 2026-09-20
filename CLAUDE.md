@@ -216,3 +216,8 @@ where the process leaked, and at most three changes, checked by the next retro. 
 `.claude/commands/`.
 Issue creation is live (the hold lifted 2026-09-07); ground every issue in a planning doc or an
 explicit instruction from Tom, and check it isn't already tracked.
+
+**Usage.** Review rounds are what spend the usage window (~$9–11 each on Opus, ~$0.20 for a `qa`
+run; ~90% of tokens are context re-reads), so: one review/fix cycle in flight at a time, check
+`/usage` before launching a review round, `/clear` between issues, and let `qa` probe a fix before
+it goes back to `reviewer`. Measurements and rationale: `planning/claude-dev-team.md` "Usage budget".

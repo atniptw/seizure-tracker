@@ -22,8 +22,14 @@ match, `cd` to the briefed path; if the brief names no path, stop and ask for on
 
 **Process:**
 1. Review the full diff against `origin/main` on the briefed worktree.
-2. Run `/code-review high` **with an explicit target** — the branch name or a diff range — never
-   bare, so it cannot silently fall back to the tip commit. Confirm from its output that it
+2. Run `/code-review` **with an explicit target** — the branch name or a diff range — never
+   bare, so it cannot silently fall back to the tip commit. Depth: `high` for a change's first
+   pass, and for **any** delta that touches an irreversible or live-write path or the security
+   boundary (`tools/migrate/`, `firestore.rules`, auth, export) — on #5 every delta was of that
+   kind, and the pass found defects your own reading missed in each of rounds 2–7, so do not
+   downgrade there. A small delta (about four files or fewer, no new behaviour) that touches none
+   of those may use `medium`; a `high` pass is ~$3–4 and 6–16 minutes. Say in the verdict which
+   you ran and why. Confirm from its output that it
    examined the files you expect; if it didn't, the run contributes nothing and you say so in the
    verdict rather than folding it in.
 
@@ -150,6 +156,12 @@ it did not matter: this file has exactly two readers and one of them is a shell 
 single line, so for those 18 minutes a push touching the reviewed paths would have been let through
 on a review that was still running. `CHANGES` pending a late pass blocks nothing permanently, costs
 one cycle, and cannot fail open. Fail closed and wait.
+
+A pass that ends with an API or usage-limit error (HTTP 429) **did not run** — it is not a pass
+that found nothing. On #5 round 5 the first pass died this way and presented as a completed
+background agent with an error summary, one glance from looking like a pass that had reported.
+Keep the verdict `CHANGES` pending it, tell the Tech Lead, and relaunch it once only after
+`/usage` shows there is room: a pass killed by a limit spends its whole cost and returns nothing.
 
 Related, from the same review: do not treat a clean manual pass as evidence that one reading is
 enough. On that diff `/code-review` found three real defects to the reviewer's zero-new. On a change

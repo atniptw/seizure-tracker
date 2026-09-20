@@ -99,6 +99,9 @@ work.
 - **Rules change** (`area:rules`): `rules-engineer` is *both* implementer and reviewer for
   `firestore.rules` + the Node suite; `reviewer` still covers the app-side diff. Tech Lead
   **always** surfaces the rules diff to Tom before pushing.
+- **Fix round after `CHANGES`**: `qa` runs its sibling probe (`qa.md` §5) before the diff goes
+  back to `reviewer`, and `reviewer` picks the `/code-review` depth per `reviewer.md` step 2.
+  Rounds are the cost multiplier (see "Usage budget"), so the cheap check goes first.
 - **Spike** (`type:spike`): `Plan` or the relevant specialist investigates, writes findings to
   the issue, sets `needs-decision`. Tom decides. Tech Lead converts the decision into
   `type:feature` issues + a planning-doc edit. (The iOS spike round already ran this way — see
@@ -127,6 +130,38 @@ is to say which of three things happened — CI checks something no local step d
 runs lint, `last-green` only covers `test`), the marker overstated what ran, or it was an
 environment-only failure like the emulator timeout flake — because only the first two have
 actions, and they are different actions.
+
+### Usage budget
+
+Measured from the transcripts of 2026-09-19 → 09-20 (the four most recent #5 rounds; earlier
+rounds ran on another machine and are not in them). Figures are API-equivalent dollars from the
+sessions' own cost records — a proxy for relative size, not what a subscription window charges,
+and a lower bound, since some subagent transcripts are not retained.
+
+- **Rounds are the multiplier.** A review round is ~$9–11 (`reviewer` ~$5–7.5 + `/code-review high`
+  ~$3–4, both Opus); the fix that follows is ~$5.7 (`migration-lead`, Opus). A `qa` run is ~$0.20
+  (Sonnet). Opus subagents were ~75% of spend; the Sonnet main thread ~24%. A whole `/retro` plus
+  follow-ups was ~$2.4.
+- **It is mostly context re-reads.** ~90% of tokens are cache reads: every call re-reads the whole
+  context (subagents averaged 95–123k, the main thread 143k, peaking at 316k over an 18.8-hour
+  session). Fewer calls and shorter contexts are worth more than a cheaper model.
+- **The window burns when sessions overlap.** The peak was ≥$56 in five hours (09-19 19:54 →
+  09-20 00:22 UTC) with three sessions running review, fix and re-review at once; round 5's
+  `/code-review` was killed by a limit in that stretch.
+
+Rules that follow:
+
+1. **One review/fix cycle in flight at a time.** Do not run a second session's review or fix
+   passes alongside it.
+2. **Check `/usage` before launching a review round**, and defer the `/code-review` pass rather
+   than start one a limit will kill — it spends its whole cost and returns nothing.
+3. **`/clear` (or a fresh session) between issues.** Do not carry one main thread across a
+   whole migration; its context size is paid on every call.
+4. **Probe cheap first.** `qa`'s sibling probe (`qa.md` §5) runs before a fix goes back to
+   `reviewer`; the reviewer's `/code-review` depth is chosen per `reviewer.md` step 2.
+
+Not done, deliberately: moving `migration-lead` fix runs from Opus to Sonnet. Rounds 5 and 6 each
+shipped a fix-induced defect from that persona, so it needs watching before it is cheapened.
 
 ### Human touch points (Tom, not the team)
 
