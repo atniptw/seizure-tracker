@@ -227,3 +227,283 @@ describe('resolveCredentialSource — live project', () => {
     expect(error.message).toContain(path.join(dir, 'application_default_credentials.json'));
   });
 });
+
+// --- The whole-resolver matrix (review round 6) ------------------------------------------------
+//
+// Every route × every file type × project-supplied-or-not, each row stating its exact outcome.
+// The cases above test the same function; this exists because they test it a route at a time, and
+// twice now a fix verified on the route a finding named has changed the *sibling* route unnoticed:
+//
+// - round 5: the decision moved from "which variable named the file" to "what the file's type is",
+//   which fixed GOOGLE_APPLICATION_CREDENTIALS→authorized_user and, on the ADC branch, turned
+//   "always require a project id" into "require one unless the file names one";
+// - so a `service_account` key sitting at the gcloud well-known ADC path supplied the project by
+//   itself, and `restore.js dump.json --allow-prod --commit` — the one irreversible command here —
+//   could delete and rewrite a project the operator never typed. `--allow-prod` names no project.
+//
+// Neither round's ADC fixture was ever anything but `authorized_user`, so nothing failed. A matrix
+// cannot have that gap: a row exists for each combination whether or not a finding pointed at it,
+// and the outcomes are written out rather than computed, so a test cannot agree with a bug by
+// sharing its reasoning.
+//
+// No value below is a real credential; every path is a real temp file with invented contents.
+
+/** A well-formed external_account (workload-identity) file — a real type applicationDefault() takes. */
+const EXTERNAL_ACCOUNT = {
+  type: 'external_account',
+  audience: '//iam.googleapis.com/projects/000000000000/locations/global/workloadIdentityPools/not-a-real-pool/providers/not-a-real-provider',
+  subject_token_type: 'urn:ietf:params:oauth:token-type:jwt',
+  token_url: 'https://sts.googleapis.com/v1/token',
+  credential_source: { file: '/dev/null' },
+};
+
+/** Sentinels for the two "there is no readable file" fixtures. */
+const MISSING = Symbol('no file written at all');
+const UNREADABLE = Symbol('a directory where a file should be — readFileSync gives EISDIR');
+
+// The two project ids are deliberately different, so a row's expected `projectId` says which of
+// the two the resolver picked rather than being ambiguous between them.
+const TYPED = 'seizure-tracker-typed';      // what the operator passed as --project
+const IN_KEY = 'seizure-tracker-in-the-key'; // what the fixture key file's own project_id says
+
+/** Write one fixture at `at`; returns the path the resolver will be pointed at. */
+function writeFixture(at, file) {
+  if (file === MISSING) return at;
+  if (file === UNREADABLE) {
+    fs.mkdirSync(at);
+    return at;
+  }
+  fs.writeFileSync(at, typeof file === 'string' ? file : JSON.stringify(file), { mode: 0o600 });
+  return at;
+}
+
+function tmpDir() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'seizuretracker-creds-'));
+  tmpConfigDirs.push(dir);
+  return dir;
+}
+
+/**
+ * Put the environment into the state the row describes and return what to call the resolver with.
+ *
+ * CLOUDSDK_CONFIG is redirected on **every** row, including the key-file ones: a row that means
+ * "no ADC file exists" must not silently pass because the machine running the suite happens to
+ * have real ADC on it, or fail because it does not.
+ */
+function arrange(row) {
+  const configDir = tmpDir();
+  process.env.CLOUDSDK_CONFIG = configDir;
+  const adcPath = path.join(configDir, 'application_default_credentials.json');
+
+  let credPath = null;
+  if (row.route === 'adc') credPath = writeFixture(adcPath, row.file);
+  if (row.route === 'key-file' || row.ambient === 'key-file') {
+    const at = writeFixture(path.join(tmpDir(), 'creds.json'), row.file);
+    process.env.GOOGLE_APPLICATION_CREDENTIALS = at;
+    if (row.route === 'key-file') credPath = at;
+  }
+  if (row.ambient === 'adc') writeFixture(adcPath, AUTHORIZED_USER);
+
+  return {
+    args: {
+      emulatorHost: row.route === 'emulator' ? '127.0.0.1:8080' : null,
+      projectId: row.project,
+    },
+    credPath,
+  };
+}
+
+const MATRIX = [
+  // --- emulator: no credential is read at all, but the project must still be named -------------
+  {
+    name: 'emulator + --project — no credential of any kind is consulted',
+    route: 'emulator', project: TYPED,
+    resolves: { kind: 'emulator' },
+  },
+  {
+    name: 'emulator, no --project — refused',
+    route: 'emulator', project: undefined,
+    refuses: [/emulator needs an explicit --project/],
+  },
+  {
+    name: 'emulator + --project, with a service-account key in the environment — key ignored',
+    route: 'emulator', ambient: 'key-file', file: () => serviceAccountKey(IN_KEY), project: TYPED,
+    resolves: { kind: 'emulator' },
+  },
+  {
+    name: 'emulator + --project, with an ADC file on disk — ADC ignored',
+    route: 'emulator', ambient: 'adc', project: TYPED,
+    resolves: { kind: 'emulator' },
+  },
+
+  // --- GOOGLE_APPLICATION_CREDENTIALS: a file the operator named in this command ---------------
+  // This is the one route where the file may supply the project id, and only for a
+  // service-account key. Unchanged by round 6.
+  {
+    name: 'key file: service_account + --project — resolves; initFirestore prefers the typed id',
+    route: 'key-file', file: () => serviceAccountKey(IN_KEY), project: TYPED,
+    resolves: { kind: 'key-file', type: 'service_account', projectId: IN_KEY },
+  },
+  {
+    name: 'key file: service_account, no --project — the key names its own project, so accepted',
+    route: 'key-file', file: () => serviceAccountKey(IN_KEY), project: undefined,
+    resolves: { kind: 'key-file', type: 'service_account', projectId: IN_KEY },
+  },
+  {
+    name: 'key file: authorized_user + --project — accepted, project id NOT taken from the file',
+    route: 'key-file', file: () => AUTHORIZED_USER, project: TYPED,
+    resolves: { kind: 'key-file', type: 'authorized_user', projectId: undefined },
+  },
+  {
+    name: 'key file: authorized_user, no --project — refused (round 5)',
+    route: 'key-file', file: () => AUTHORIZED_USER, project: undefined,
+    refuses: [/but no project id/, /type "authorized_user"/, /--project=<id> or set GOOGLE_CLOUD_PROJECT/],
+  },
+  {
+    name: 'key file: authorized_user carrying a project_id, no --project — still refused',
+    route: 'key-file', file: () => ({ ...AUTHORIZED_USER, project_id: 'a-quota-project' }), project: undefined,
+    refuses: [/but no project id/],
+  },
+  {
+    name: 'key file: external_account + --project — accepted, described by its own type',
+    route: 'key-file', file: () => EXTERNAL_ACCOUNT, project: TYPED,
+    resolves: { kind: 'key-file', type: 'external_account', projectId: undefined },
+  },
+  {
+    name: 'key file: external_account, no --project — refused, naming the type',
+    route: 'key-file', file: () => EXTERNAL_ACCOUNT, project: undefined,
+    refuses: [/but no project id/, /type "external_account"/],
+  },
+
+  // --- the well-known ADC path: ambient, so --project is required unconditionally --------------
+  // Nothing found here may choose the project, whatever its type. The operator did not name this
+  // file in the command; `restore.js --allow-prod --commit` deletes and rewrites whatever it is
+  // pointed at, and --allow-prod names no project.
+  {
+    name: 'ADC path: service_account key, no --project — REFUSED (round 6 blocking regression)',
+    route: 'adc', file: () => serviceAccountKey(IN_KEY), project: undefined,
+    refuses: [
+      /but no project id/,
+      /type "service_account"/,
+      /ambient, not something you named in this command/,
+      /--project=<id> or set GOOGLE_CLOUD_PROJECT/,
+    ],
+  },
+  {
+    name: 'ADC path: service_account key + --project — the typed id is the only candidate',
+    route: 'adc', file: () => serviceAccountKey(IN_KEY), project: TYPED,
+    // projectId: undefined even though the file carries IN_KEY. The resolver never offers it, so
+    // initFirestore's `projectId || credential.projectId` cannot fall back to a project the
+    // operator did not type — which is also the whole answer to "what if the two disagree".
+    resolves: { kind: 'adc', type: 'service_account', projectId: undefined },
+  },
+  {
+    name: 'ADC path: authorized_user + --project — accepted',
+    route: 'adc', file: () => AUTHORIZED_USER, project: TYPED,
+    resolves: { kind: 'adc', type: 'authorized_user', projectId: undefined },
+  },
+  {
+    name: 'ADC path: authorized_user, no --project — refused',
+    route: 'adc', file: () => AUTHORIZED_USER, project: undefined,
+    refuses: [/but no project id/, /ADC carries no project id/],
+  },
+  {
+    name: 'ADC path: external_account + --project — accepted, described by its own type',
+    route: 'adc', file: () => EXTERNAL_ACCOUNT, project: TYPED,
+    resolves: { kind: 'adc', type: 'external_account', projectId: undefined },
+  },
+  {
+    name: 'ADC path: external_account, no --project — refused',
+    route: 'adc', file: () => EXTERNAL_ACCOUNT, project: undefined,
+    refuses: [/but no project id/, /type "external_account"/],
+  },
+
+  // --- the file cannot be read or parsed: fatal here, before any RPC, naming the path ----------
+  // These land before the project-id check on both routes, so each is tested with and without one.
+  {
+    name: 'key file: path does not exist + --project — refused, naming the path',
+    route: 'key-file', file: MISSING, project: TYPED,
+    refuses: [/Could not read the credential file/],
+  },
+  {
+    name: 'key file: path does not exist, no --project — the read failure comes first',
+    route: 'key-file', file: MISSING, project: undefined,
+    refuses: [/Could not read the credential file/],
+  },
+  {
+    name: 'key file: unreadable (a directory at that path) + --project — refused',
+    route: 'key-file', file: UNREADABLE, project: TYPED,
+    refuses: [/Could not read the credential file/],
+  },
+  {
+    name: 'key file: not JSON + --project — refused',
+    route: 'key-file', file: 'this is not json', project: TYPED,
+    refuses: [/is not valid JSON/],
+  },
+  {
+    name: 'key file: not JSON, no --project — the parse failure comes first',
+    route: 'key-file', file: 'this is not json', project: undefined,
+    refuses: [/is not valid JSON/],
+  },
+  {
+    name: 'ADC path: unreadable (a directory at that path) + --project — refused',
+    route: 'adc', file: UNREADABLE, project: TYPED,
+    refuses: [/Could not read the credential file/],
+  },
+  {
+    name: 'ADC path: not JSON + --project — refused',
+    route: 'adc', file: 'this is not json', project: TYPED,
+    refuses: [/is not valid JSON/],
+  },
+  {
+    name: 'ADC path: not JSON, no --project — the parse failure comes first',
+    route: 'adc', file: 'this is not json', project: undefined,
+    refuses: [/is not valid JSON/],
+  },
+
+  // --- nothing at all ------------------------------------------------------------------------
+  {
+    name: 'no emulator, no GOOGLE_APPLICATION_CREDENTIALS, no ADC file — names all three options',
+    route: 'none', project: TYPED,
+    refuses: [/No credentials/, /FIRESTORE_EMULATOR_HOST/, /gcloud auth application-default login/],
+  },
+  {
+    name: 'no credentials and no --project — still the no-credentials refusal',
+    route: 'none', project: undefined,
+    refuses: [/No credentials/],
+  },
+];
+
+describe('resolveCredentialSource — the whole matrix', () => {
+  test.each(MATRIX.map((row) => [row.name, row]))('%s', (_name, row) => {
+    const { args, credPath } = arrange({ ...row, file: typeof row.file === 'function' ? row.file() : row.file });
+
+    if (row.refuses) {
+      for (const pattern of row.refuses) {
+        expect(() => resolveCredentialSource(args)).toThrow(pattern);
+      }
+      // Every refusal names the file it read, when there was one to read.
+      if (credPath) expect(() => resolveCredentialSource(args)).toThrow(credPath);
+      return;
+    }
+
+    const expected = row.resolves.kind === 'emulator'
+      ? { kind: 'emulator' }
+      : { ...row.resolves, path: credPath };
+    expect(resolveCredentialSource(args)).toEqual(expected);
+  });
+
+  test('the matrix covers every route the resolver can take', () => {
+    expect(new Set(MATRIX.map((r) => r.route))).toEqual(new Set(['emulator', 'key-file', 'adc', 'none']));
+    // Both file routes, both project states, for each type this tool can meet.
+    for (const route of ['key-file', 'adc']) {
+      for (const type of ['service_account', 'authorized_user', 'external_account']) {
+        for (const project of [TYPED, undefined]) {
+          const covered = MATRIX.filter((r) => r.route === route && r.project === project)
+            .some((r) => typeof r.file === 'function' && r.file().type === type);
+          expect({ route, type, project: project || 'none', covered }).toEqual({ route, type, project: project || 'none', covered: true });
+        }
+      }
+    }
+  });
+});

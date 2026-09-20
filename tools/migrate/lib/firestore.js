@@ -141,6 +141,34 @@ function noProjectIdError(credPath, type) {
 }
 
 /**
+ * The ADC route's refusal, which is **unconditional**: nothing found at the gcloud well-known path
+ * may supply the project id, whatever the file's `type` says.
+ *
+ * This is deliberately stricter than the `GOOGLE_APPLICATION_CREDENTIALS` route, and the asymmetry
+ * is the point. That variable is something the operator typed, naming a file they chose, in the
+ * command they are running. The ADC path is *ambient*: it is whatever `gcloud auth
+ * application-default login` last wrote, or whatever anything else on the machine dropped there,
+ * and an operator running `restore.js dump.json --allow-prod --commit` never mentions it. If a
+ * `service_account` key happened to be sitting there, reading its `project_id` would let the one
+ * irreversible command in this toolkit delete and rewrite a project the operator never typed —
+ * `--allow-prod` names no project, and `--allow-project-mismatch` is not consulted when the dump
+ * came from that same project. So on this route the project is always typed out loud.
+ */
+function adcNoProjectIdError(credPath, type) {
+  const what = type
+    ? `an Application Default Credentials file of type "${type}"`
+    : 'an Application Default Credentials file';
+  return new Error(
+    `Found ${what} (${credPath}) but no project id.\n` +
+      'ADC carries no project id, so the Admin SDK would fail later and unhelpfully — and the ADC\n' +
+      'file is ambient, not something you named in this command, so even a service-account key\n' +
+      'sitting at that path is not allowed to choose the project for you: this tool would then\n' +
+      'delete and rewrite a project you never typed.\n' +
+      'Pass --project=<id> or set GOOGLE_CLOUD_PROJECT.'
+  );
+}
+
+/**
  * Which credential the Admin SDK is going to use — decided up front so a missing one fails here,
  * with a message naming every option, rather than inside the SDK on the first RPC.
  *
@@ -152,15 +180,20 @@ function noProjectIdError(credPath, type) {
  * - gcloud ADC (`gcloud auth application-default login`) — user credentials at the well-known
  *   path, revocable with one command and with no key file to leak. Preferred for the rehearsal.
  *
- * A project id is required unless the credential file itself carries one. Only a service-account
- * key does: ADC — and any other `authorized_user` file, including one an operator has pointed
- * `GOOGLE_APPLICATION_CREDENTIALS` at — carries none, and without one the SDK fails later and
- * confusingly ("Client is not yet ready to issue requests"). So the decision is made on the
- * file's contents, not on which environment variable named it.
+ * A project id is always required. The one way to not type it is `GOOGLE_APPLICATION_CREDENTIALS`
+ * naming a service-account key, which carries its own `project_id` — a file the operator chose, in
+ * the command they are running. Everything else must be told: an `authorized_user` file carries no
+ * `project_id` wherever it was named from (which is the round-5 fix: the decision is made on the
+ * file's contents, not on which environment variable named it), and the ADC route requires it
+ * **unconditionally**, whatever the file's type, because that path is ambient — see
+ * `adcNoProjectIdError`. Without a project id the SDK fails later and confusingly ("Client is not
+ * yet ready to issue requests").
  *
- * Returns `{ kind: 'emulator' | 'key-file' | 'adc', path?, projectId? }`, where `projectId` is the
- * one read out of a service-account key — the reason initFirestore never has to fall back to the
- * SDK's `@private` `db.projectId`.
+ * Returns `{ kind: 'emulator' | 'key-file' | 'adc', path?, type?, projectId? }`, where `projectId`
+ * is set only for a service-account key named by `GOOGLE_APPLICATION_CREDENTIALS` — the reason
+ * initFirestore never has to fall back to the SDK's `@private` `db.projectId`. A supplied
+ * `--project` takes precedence over it (`initFirestore`: `projectId || credential.projectId`), so
+ * the tool only ever acts on a project the operator named or a key they pointed it at by hand.
  */
 function resolveCredentialSource({ emulatorHost, projectId }) {
   if (emulatorHost) {
@@ -179,9 +212,12 @@ function resolveCredentialSource({ emulatorHost, projectId }) {
 
   const adc = adcFilePath();
   if (fs.existsSync(adc)) {
+    // The file is read for its `type` — so the banner can say what it actually is — and NOT for a
+    // project id. See adcNoProjectIdError: on this route the operator always supplies the project,
+    // so the returned projectId is always undefined and the supplied value is the one used.
     const file = readCredentialFile(adc);
-    if (!file.projectId && !projectId) throw noProjectIdError(adc, file.type);
-    return { kind: 'adc', path: adc, type: file.type, projectId: file.projectId || undefined };
+    if (!projectId) throw adcNoProjectIdError(adc, file.type);
+    return { kind: 'adc', path: adc, type: file.type, projectId: undefined };
   }
 
   throw new Error(
