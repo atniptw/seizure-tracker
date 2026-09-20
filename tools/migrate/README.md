@@ -69,20 +69,33 @@ scripts accept both: your own gcloud **Application Default Credentials**, or a d
 **service-account key**. Prefer ADC. A key file is long-lived, and `security-privacy.md §2.3` lists
 whoever holds it as an actor with the same reach as the whole database; ADC is a user credential
 with nothing persistent to leak beyond a revocable token, and it goes away with one command.
+(Anything else `applicationDefault()` accepts — the workload-identity credential types — works too
+and is named by its own type in the banner. Neither of the two paths below is it, and nobody here
+has a reason to use one.)
 
 ```bash
 gcloud auth application-default login       # once — writes the well-known ADC file (see below)
 node backup.js --project=<prod-project-id>  # --project is REQUIRED on this path
 ```
 
-- **`--project` (or `GOOGLE_CLOUD_PROJECT`) is required with ADC.** Unlike a key file, ADC carries
-  no project id, so without one the SDK would fail late and confusingly. The scripts refuse to
-  start instead.
+- **`--project` (or `GOOGLE_CLOUD_PROJECT`) is required on this path — always, whatever is sitting
+  at the ADC path.** ADC carries no project id, so without one the SDK would fail late and
+  confusingly; the scripts refuse to start instead. The requirement is unconditional even if the
+  file there happens to be a service-account key that names its own project: the ADC path is
+  *ambient*, not something you named in the command you are running, and `restore.js --commit`
+  deletes and rewrites whatever it is pointed at (`--allow-prod` names no project). On this path the
+  target project is always typed out loud, and a `--project` that disagrees with an ADC-path key's
+  own `project_id` is not a conflict to resolve — the file's id is never read, so the project you
+  typed is the only one the scripts can act on.
 - The signed-in account needs Firestore access on the project (the project owner does;
   `roles/datastore.user` is enough).
 - The well-known file is `~/.config/gcloud/application_default_credentials.json`, or
   `$CLOUDSDK_CONFIG/application_default_credentials.json` if you set `CLOUDSDK_CONFIG`. Both
-  scripts print which credential they resolved on the `Creds:` line of their banner — read it.
+  scripts print what they resolved on the `Creds:` line of their banner — **read it.** It names the
+  file's actual type *and* where it was found, in that order, because the two are independent:
+  `user credentials at the gcloud ADC path (…)` is the ADC you meant, and `service-account key at
+  the gcloud ADC path (…)` is a downloaded key someone left there — the reach of the whole database,
+  on the path documented here as the safe one.
 - If the SDK complains about a quota project:
   `gcloud auth application-default set-quota-project <prod-project-id>`.
 
@@ -113,6 +126,25 @@ the variable: `GOOGLE_APPLICATION_CREDENTIALS` accepts any ADC file, so if you p
 user credentials (`"type": "authorized_user"`) rather than a downloaded key, it carries no
 `project_id` and `--project` becomes required — the scripts say so up front instead of letting the
 SDK fail at the first RPC with "Client is not yet ready to issue requests".
+
+This is the **one** way to not type `--project`: a `service_account` key, named by that variable in
+the command you are running, may supply the project it belongs to. Nothing else can — not an
+`authorized_user` file however it was named, and not anything at the ADC path (see above).
+
+Two other refusals — on this path and on the ADC one alike, both up front rather than at the first
+RPC:
+
+- A file with **no `"type"`** is rejected as not a credential file at all — a `firebase.json`, a
+  `google-services.json` or a truncated key gets an error naming the path, not a banner calling it a
+  service-account key.
+- A file with a `"type"` the scripts do not specifically know (the workload-identity family:
+  `external_account`, `impersonated_service_account`, …) is **accepted** — the Admin SDK supports
+  them and this tool does not second-guess that list — and the banner prints that type verbatim
+  rather than claiming it is a key. Like `authorized_user`, they name no project, so `--project` is
+  required.
+
+No refusal ever quotes the file's contents, only its path: a credential file is secret material, and
+you can read your own file.
 
 Least privilege, if you want it: instead of the default Firebase Admin SDK account (which is
 broad), create a dedicated service account in the Google Cloud console with only
@@ -397,7 +429,9 @@ PROD_DUMP=$(ls -t dumps/dump-$PROD-*-rehearsal.json | head -1)
 unset GOOGLE_APPLICATION_CREDENTIALS        # if you used the key-file path. ADC is ambient and
                                             # cannot be unset per-shell — that is fine: with
                                             # FIRESTORE_EMULATOR_HOST set the scripts talk only to
-                                            # the emulator, and a live target needs --allow-prod.
+                                            # the emulator; and a live target needs --allow-prod AND
+                                            # a --project you typed, which the ADC path never
+                                            # supplies for you whatever file is sitting there.
 # shell B:
 #   /Users/tom/.nvm/versions/node/v24.13.0/bin/firebase emulators:start --project $EMU --only firestore
 export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
