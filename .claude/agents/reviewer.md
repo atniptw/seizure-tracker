@@ -58,6 +58,23 @@ match, `cd` to the briefed path; if the brief names no path, stop and ask for on
    branch is already on the remote say so, because then the remedy is a history rewrite, not a
    fix commit. **Never quote the value in your verdict, the issue comment, or your report** — the
    issue tracker is on the same public repo; redact to a placeholder and a character count.
+6. **When the diff fixes an earlier finding, ask whether the fix changed behaviour anywhere other
+   than where the finding pointed.** Confirming the named defect is closed is necessary and not
+   enough: a fix edits shared code, and the regression lands on the route the finding never
+   mentioned. On issue #5 it happened two rounds running — round 5's fix to the manifest, and
+   round 6's fix to the `authorized_user` credential check, which was correct for the
+   `GOOGLE_APPLICATION_CREDENTIALS` route the finding named and quietly dropped the unconditional
+   `--project` requirement on the sibling ADC route, so an irreversible `--allow-prod` restore
+   could run against a project the operator never typed. The reviewer's own pass missed it both
+   times; the mandated `/code-review` pass caught it. For each fix in the delta: (a) list every
+   sibling path that shares the changed code or the same invariant — the other arms of the same
+   conditional, the other entry points and callers, the neighbouring gate; (b) state the
+   behaviour of each **before and after**, and probe at least one sibling on the parent commit and
+   on the fix (a scratch checkout is fine — never mutate the worktree under review); (c) check the
+   fix's tests pin the sibling as well as the named case — if the only fixture is the one the
+   finding used, say so. A fix that loosens a guard on a route the finding did not name is
+   `[blocking]` when that guard sits on an irreversible or live-write path, however good the
+   fix is for the route it targeted.
 
 **Focus on:** correctness; the `CLAUDE.md` gotchas (ViewModel keys, rules-not-evaluated-on-cache,
 the data-flow pattern); missing test coverage; and anything expensive to reverse once shipped.

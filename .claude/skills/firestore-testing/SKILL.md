@@ -31,6 +31,18 @@ Security rules (`firestore.rules`) — Node + Jest, a separate suite:
 cd firestore-tests && npm ci && firebase emulators:exec --project demo-seizuretracker-rules-test --only firestore "npm test"
 ```
 
+Migration tooling (`tools/migrate/`, the backup/restore scripts) — Node + Jest, a third separate
+suite. It needs only the Firestore emulator (no Auth). Go through `npm test`, not `jest` directly:
+the script is `jest --runInBand`, and parallel workers cross-talk on the one emulator, so a bare
+`npx jest` produces failures that are not real:
+
+```bash
+cd tools/migrate && npm ci && firebase emulators:exec --project demo-seizuretracker-rules-test --only firestore "npm test"
+```
+
+CI does **not** run this package (tracked in #23), so for a change under `tools/migrate/` a green
+run here is the only automated evidence there is — say in the marker's `ran:` line that you ran it.
+
 Compile only, when you just want to know it builds:
 
 ```bash
