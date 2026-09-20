@@ -134,19 +134,32 @@ const HEALTH_DATA_WARNING = [
 /**
  * One-line description of the credential initFirestore resolved, for the target banner.
  *
- * `kind: 'key-file'` means "the file GOOGLE_APPLICATION_CREDENTIALS named", which is not always a
- * service-account key — an operator can point it at gcloud user credentials. Say what the file
- * actually is, so the banner is not the thing that tells the operator the wrong story.
+ * Two independent facts, and the banner has to carry **both** on every route: *what the file is*,
+ * and *where it was found*. Neither implies the other.
+ *
+ * - `kind: 'key-file'` means "the file GOOGLE_APPLICATION_CREDENTIALS named", which is not always a
+ *   service-account key — an operator can point it at gcloud user credentials.
+ * - `kind: 'adc'` means "the file at gcloud's well-known path", which is not always user
+ *   credentials — anything can be sitting there, including a downloaded key.
+ *
+ * Reporting the location alone is how that second case stayed invisible: the banner said
+ * `gcloud ADC (…)` over a service-account key, while `README.md` tells the operator to prefer ADC
+ * precisely because a key has the reach of the whole database (`security-privacy.md §2.3`) and to
+ * read this line to know which they got. A type this function does not recognise is printed
+ * verbatim rather than guessed at — asserting "service-account key" over an unknown file is the
+ * failure mode, in both directions.
  */
 function describeCredential(credential) {
   if (!credential) return 'unknown';
   if (credential.kind === 'emulator') return 'none (emulator)';
-  if (credential.kind === 'adc') return `gcloud ADC (${credential.path})`;
-  if (credential.type === 'authorized_user') return `user credentials (${credential.path})`;
-  if (credential.type && credential.type !== 'service_account') {
-    return `"${credential.type}" credential file (${credential.path})`;
-  }
-  return `service-account key (${credential.path})`;
+  const what =
+    credential.type === 'service_account' ? 'service-account key'
+      : credential.type === 'authorized_user' ? 'user credentials'
+        : `"${credential.type}" credential file`;
+  const where = credential.kind === 'adc'
+    ? 'at the gcloud ADC path'
+    : 'from GOOGLE_APPLICATION_CREDENTIALS';
+  return `${what} ${where} (${credential.path})`;
 }
 
 /**

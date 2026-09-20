@@ -85,8 +85,22 @@ function adcFilePath() {
 }
 
 /**
- * Read a credential file and report what it is. Both accepted sources are JSON with a `type`:
- * `service_account` for a downloaded key, `authorized_user` for gcloud user credentials.
+ * Read a credential file and report what it is. Every credential `applicationDefault()` accepts is
+ * JSON naming itself in a `type` field: `service_account` for a downloaded key, `authorized_user`
+ * for gcloud user credentials, and the workload-identity family (`external_account`,
+ * `external_account_authorized_user`, `impersonated_service_account`, `gdch_service_account`).
+ *
+ * A file with **no** `type` is refused here: it is not a credential file at all, and accepting it
+ * is how `GOOGLE_APPLICATION_CREDENTIALS=/path/to/firebase.json` (or a truncated key) got as far as
+ * a banner calling it a service-account key and then died inside the SDK on "Client is not yet
+ * ready to issue requests" — the late, confusing failure this function exists to pre-empt.
+ *
+ * A file whose `type` is present but not one of the six is **accepted**, and described to the
+ * operator by that type verbatim. An allowlist here would be the wrong gate: google-auth-library
+ * owns that list and can add to it, and a tool that refuses a credential the SDK underneath would
+ * have accepted is the same class of bug as round 5's (hard-requiring
+ * `GOOGLE_APPLICATION_CREDENTIALS` and so refusing the ADC the code below already supported). The
+ * `type` check is here to catch "this is not a credential file", not to second-guess Google's.
  *
  * `projectId` is returned **only** for a service-account key, which is the one kind that names
  * the project it belongs to. An `authorized_user` file may carry a `quota_project_id`; that is a
@@ -94,12 +108,16 @@ function adcFilePath() {
  *
  * A file that cannot be read or parsed is fatal here rather than later: the whole point of
  * resolving credentials up front is that the failure lands before any RPC, with the path in it.
+ * None of these messages quote the file's **contents**. It is secret material, the operator can
+ * read their own file, and `err.message` from `JSON.parse` echoes the first characters of the
+ * document — which on a raw token file is the token.
  */
 function readCredentialFile(credPath) {
   let raw;
   try {
     raw = fs.readFileSync(credPath, 'utf8');
   } catch (err) {
+    // err.message here is an fs error naming the path and the errno — never file content.
     throw new Error(
       `Could not read the credential file at ${credPath}: ${err.message}\n` +
         'Fix the path it is named by, or unset it and pick another source (README.md).'
@@ -111,7 +129,7 @@ function readCredentialFile(credPath) {
     parsed = JSON.parse(raw);
   } catch (err) {
     throw new Error(
-      `The credential file at ${credPath} is not valid JSON: ${err.message}\n` +
+      `The credential file at ${credPath} is not valid JSON (${err.name}).\n` +
         'A service-account key and a gcloud ADC file are both JSON. Re-download the key, or re-run\n' +
         '`gcloud auth application-default login`.'
     );
@@ -119,8 +137,26 @@ function readCredentialFile(credPath) {
 
   const obj = parsed && typeof parsed === 'object' ? parsed : {};
   const type = typeof obj.type === 'string' && obj.type ? obj.type : null;
+  if (!type) throw untypedCredentialError(credPath);
   const declared = typeof obj.project_id === 'string' && obj.project_id ? obj.project_id : null;
   return { type, projectId: type === 'service_account' ? declared : null };
+}
+
+/**
+ * "This file is not a credential." Named, not quoted: the path is the operator's own and useful,
+ * the contents are secret and are not.
+ */
+function untypedCredentialError(credPath) {
+  return new Error(
+    `The credential file at ${credPath} has no "type" field, so it is not a credential file the\n` +
+      'Admin SDK can use.\n' +
+      'A downloaded service-account key has "type": "service_account"; gcloud Application Default\n' +  // id-scan:ignore — prose naming the token the guard hunts, not a key
+      'Credentials have "type": "authorized_user". A firebase.json, a google-services.json or a\n' +
+      'truncated key has none, and without one the SDK fails at the first RPC with "Client is not\n' +
+      'yet ready to issue requests".\n' +
+      'Re-download the key (Firebase console -> Project settings -> Service accounts), or re-run\n' +
+      '`gcloud auth application-default login`.'
+  );
 }
 
 /**
@@ -130,9 +166,9 @@ function readCredentialFile(credPath) {
  * the same explicit project id that gcloud ADC does.
  */
 function noProjectIdError(credPath, type) {
-  const what = type ? `a credential file of type "${type}"` : 'a credential file with no "type"';
+  // `type` is always a non-empty string: readCredentialFile refuses an untyped file outright.
   return new Error(
-    `Found ${what} (${credPath}) but no project id.\n` +
+    `Found a credential file of type "${type}" (${credPath}) but no project id.\n` +
       'ADC carries no project id, and neither does any other user-credentials file — only a\n' +
       'service-account key names its own project. Without one the Admin SDK would fail later and\n' +
       'unhelpfully ("Client is not yet ready to issue requests").\n' +
@@ -155,11 +191,9 @@ function noProjectIdError(credPath, type) {
  * came from that same project. So on this route the project is always typed out loud.
  */
 function adcNoProjectIdError(credPath, type) {
-  const what = type
-    ? `an Application Default Credentials file of type "${type}"`
-    : 'an Application Default Credentials file';
+  // `type` is always a non-empty string: readCredentialFile refuses an untyped file outright.
   return new Error(
-    `Found ${what} (${credPath}) but no project id.\n` +
+    `Found an Application Default Credentials file of type "${type}" (${credPath}) but no project id.\n` +
       'ADC carries no project id, so the Admin SDK would fail later and unhelpfully — and the ADC\n' +
       'file is ambient, not something you named in this command, so even a service-account key\n' +
       'sitting at that path is not allowed to choose the project for you: this tool would then\n' +

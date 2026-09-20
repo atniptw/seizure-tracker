@@ -27,6 +27,7 @@ const os = require('os');
 const path = require('path');
 
 const { resolveCredentialSource, adcFilePath } = require('../lib/firestore');
+const { describeCredential } = require('../lib/cli');
 
 const ENV_KEYS = ['GOOGLE_APPLICATION_CREDENTIALS', 'CLOUDSDK_CONFIG'];
 const saved = {};
@@ -418,6 +419,49 @@ const MATRIX = [
     refuses: [/but no project id/, /type "external_account"/],
   },
 
+  // --- a file with no `type` is not a credential file, on either route ------------------------
+  // Refused before the project-id check, so the message is the same with or without --project: the
+  // complaint is about the file, and "supply --project" would be useless advice. Before this, any
+  // JSON at all plus --project resolved, the banner asserted "service-account key", and the SDK
+  // failed at the first RPC — the exact late failure readCredentialFile exists to pre-empt.
+  {
+    name: 'key file: JSON with no "type" + --project — refused, naming the path',
+    route: 'key-file', file: () => ({ client_id: 'not-a-real-client-id', note: 'not a credential' }), project: TYPED,
+    refuses: [/has no "type" field/, /"type": "service_account"/, /gcloud auth application-default login/],  // id-scan:ignore — regex naming the token the guard hunts, not a key
+  },
+  {
+    name: 'key file: JSON with no "type", no --project — same refusal, not the project one',
+    route: 'key-file', file: () => ({ client_id: 'not-a-real-client-id' }), project: undefined,
+    refuses: [/has no "type" field/],
+    alsoNot: [/but no project id/],
+  },
+  {
+    name: 'key file: "type" present but empty — refused',
+    route: 'key-file', file: () => ({ type: '', project_id: 'a-project' }), project: TYPED,
+    refuses: [/has no "type" field/],
+  },
+  {
+    name: 'key file: valid JSON that is not an object at all (an array) — refused',
+    route: 'key-file', file: '[]', project: TYPED,
+    refuses: [/has no "type" field/],
+  },
+  {
+    name: 'key file: valid JSON that is a bare string — refused',
+    route: 'key-file', file: '"not-a-credential"', project: TYPED,
+    refuses: [/has no "type" field/],
+  },
+  {
+    name: 'ADC path: JSON with no "type" + --project — refused',
+    route: 'adc', file: () => ({ note: 'not a credential' }), project: TYPED,
+    refuses: [/has no "type" field/],
+  },
+  {
+    name: 'ADC path: JSON with no "type", no --project — the file complaint comes first',
+    route: 'adc', file: () => ({ note: 'not a credential' }), project: undefined,
+    refuses: [/has no "type" field/],
+    alsoNot: [/but no project id/],
+  },
+
   // --- the file cannot be read or parsed: fatal here, before any RPC, naming the path ----------
   // These land before the project-id check on both routes, so each is tested with and without one.
   {
@@ -482,6 +526,11 @@ describe('resolveCredentialSource — the whole matrix', () => {
       for (const pattern of row.refuses) {
         expect(() => resolveCredentialSource(args)).toThrow(pattern);
       }
+      // Which refusal it is matters as much as that it refused: a row that should complain about
+      // the file must not instead tell the operator to pass --project.
+      for (const pattern of row.alsoNot || []) {
+        expect(() => resolveCredentialSource(args)).not.toThrow(pattern);
+      }
       // Every refusal names the file it read, when there was one to read.
       if (credPath) expect(() => resolveCredentialSource(args)).toThrow(credPath);
       return;
@@ -491,6 +540,37 @@ describe('resolveCredentialSource — the whole matrix', () => {
       ? { kind: 'emulator' }
       : { ...row.resolves, path: credPath };
     expect(resolveCredentialSource(args)).toEqual(expected);
+  });
+
+  test('a credential-file refusal never quotes the file, only its path', () => {
+    // The first 10 characters of a document are echoed by V8 when JSON.parse fails at the very
+    // start: JSON.parse('qqqSECRET…') gives `Unexpected token 'q', "qqqSECRET"... is not valid
+    // JSON`. A credential file is secret material — a raw token file pointed at by mistake would
+    // put its opening characters in the operator's terminal — and the operator can read their own
+    // file, so the message names the path and stops there.
+    const contents = 'qqqSECRETqqq — standing in for a raw token file, not JSON, not a credential';
+    const file = fakeKeyFileEnv(contents);
+
+    let nativeMessage;
+    try {
+      JSON.parse(contents);
+    } catch (err) {
+      nativeMessage = err.message;
+    }
+    // Guard against a vacuous test: if this Node stops echoing, the assertions below prove nothing
+    // and should be retired rather than left looking load-bearing.
+    expect(nativeMessage).toContain('qqqSECRET');
+
+    let error;
+    try {
+      resolveCredentialSource({ emulatorHost: null, projectId: TYPED });
+    } catch (err) {
+      error = err;
+    }
+    expect(error.message).toContain(file);
+    expect(error.message).toContain('is not valid JSON');
+    expect(error.message).not.toContain('qqq');
+    expect(error.message).not.toContain('SECRET');
   });
 
   test('the matrix covers every route the resolver can take', () => {
@@ -505,5 +585,76 @@ describe('resolveCredentialSource — the whole matrix', () => {
         }
       }
     }
+    // And every type whose absence hid a defect: no `type` at all, on both file routes.
+    for (const route of ['key-file', 'adc']) {
+      expect(MATRIX.some((r) => r.route === route && (r.refuses || []).some((p) => String(p).includes('type'))))
+        .toBe(true);
+    }
+  });
+});
+
+// --- the banner (lib/cli.js) -------------------------------------------------------------------
+//
+// Lives here rather than in a cli test file because the thing under test is the pair: what
+// resolveCredentialSource decided, and what the operator is then told it decided. Fed the real
+// resolver output for that reason — a hand-built credential object could agree with the banner
+// while neither matched what the tool actually resolves.
+//
+// `Creds:` is the line README.md tells the operator to read to know whether they are running on a
+// revocable user credential or on a downloaded key with the reach of the whole database
+// (`security-privacy.md §2.3`). Describing the *location* and calling it the *type* is how a
+// service-account key at the ADC path printed `gcloud ADC (…)` and looked like the safe option.
+
+describe('describeCredential — every route names the actual file type', () => {
+  const BANNERS = [
+    {
+      route: 'emulator', project: TYPED,
+      expected: () => 'none (emulator)',
+    },
+    {
+      route: 'adc', file: () => serviceAccountKey(IN_KEY), project: TYPED,
+      expected: (p) => `service-account key at the gcloud ADC path (${p})`,
+    },
+    {
+      route: 'adc', file: () => AUTHORIZED_USER, project: TYPED,
+      expected: (p) => `user credentials at the gcloud ADC path (${p})`,
+    },
+    {
+      route: 'adc', file: () => EXTERNAL_ACCOUNT, project: TYPED,
+      expected: (p) => `"external_account" credential file at the gcloud ADC path (${p})`,
+    },
+    {
+      route: 'key-file', file: () => serviceAccountKey(IN_KEY), project: TYPED,
+      expected: (p) => `service-account key from GOOGLE_APPLICATION_CREDENTIALS (${p})`,
+    },
+    {
+      route: 'key-file', file: () => AUTHORIZED_USER, project: TYPED,
+      expected: (p) => `user credentials from GOOGLE_APPLICATION_CREDENTIALS (${p})`,
+    },
+    {
+      route: 'key-file', file: () => EXTERNAL_ACCOUNT, project: TYPED,
+      expected: (p) => `"external_account" credential file from GOOGLE_APPLICATION_CREDENTIALS (${p})`,
+    },
+  ];
+
+  test.each(BANNERS.map((row) => [`${row.route}: ${row.file ? row.file().type : 'no file'}`, row]))(
+    '%s',
+    (_name, row) => {
+      const { args, credPath } = arrange({ ...row, file: row.file ? row.file() : undefined });
+      const credential = resolveCredentialSource(args);
+      expect(describeCredential(credential)).toBe(row.expected(credPath));
+    }
+  );
+
+  test('a service-account key at the ADC path is not described as plain "gcloud ADC"', () => {
+    const { args } = arrange({ route: 'adc', file: serviceAccountKey(IN_KEY), project: TYPED });
+    const line = describeCredential(resolveCredentialSource(args));
+    expect(line).toMatch(/^service-account key/);
+    expect(line).not.toMatch(/^gcloud ADC/);
+  });
+
+  test('no credential resolved yet reads as unknown rather than as anything reassuring', () => {
+    expect(describeCredential(null)).toBe('unknown');
+    expect(describeCredential(undefined)).toBe('unknown');
   });
 });
